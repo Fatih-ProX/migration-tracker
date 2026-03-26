@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#E2007A"/>
+<title>Metro → T-Mobile Migration Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --mag:#E2007A; --mag2:#B8005F; --mag-glow:rgba(226,0,122,.2);
+  --navy:#002E5F; --navy2:#001A3A;
+  --green:#00C07A; --orange:#FF6B35; --yellow:#FFB900;
+  --white:#fff; --off:#F7F3F6; --gray:#9B8FA0; --border:rgba(226,0,122,.12);
+  --text:#1A0A14; --text2:#5C4A5A;
+  --radius:18px; --card-shadow:0 4px 20px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Barlow',sans-serif;background:var(--off);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* ── LOADING ── */
+#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+#loading-overlay.show{display:flex;}
+.spin{width:44px;height:44px;border:4px solid var(--mag-glow);border-top-color:var(--mag);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--mag);font-size:1rem;letter-spacing:.06em;text-transform:uppercase;}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--navy);color:#fff;padding:12px 22px;border-radius:50px;font-size:.85rem;font-weight:600;z-index:5000;opacity:0;pointer-events:none;transition:.3s;white-space:nowrap;max-width:90vw;text-align:center;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.ok{background:var(--green);}
+#toast.err{background:#E53935;}
+#toast.warn{background:var(--orange);}
+
+/* ── SCREENS ── */
+.screen{position:fixed;inset:0;display:none;overflow-y:auto;background:var(--off);}
+.screen.active{display:block;}
+
+/* ══ LOGIN ══ */
+#s-login{display:none;align-items:center;justify-content:center;background:linear-gradient(160deg,var(--navy2),var(--navy) 60%,#1a0030);}
+#s-login.active{display:flex;}
+.login-wrap{width:90%;max-width:400px;padding:44px 32px;background:rgba(255,255,255,.07);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.1);border-radius:28px;text-align:center;}
+.login-logo{width:68px;height:68px;background:var(--mag);border-radius:20px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:900;color:#fff;margin:0 auto 20px;box-shadow:0 10px 30px var(--mag-glow);}
+.login-title{font-family:'Barlow Condensed',sans-serif;font-size:1.9rem;font-weight:900;color:#fff;text-transform:uppercase;margin-bottom:6px;}
+.login-sub{color:rgba(255,255,255,.45);font-size:.9rem;margin-bottom:30px;}
+.l-label{display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55);text-align:left;margin-bottom:6px;margin-left:4px;}
+.l-input{width:100%;padding:15px 18px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.15);border-radius:14px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;outline:none;transition:.2s;margin-bottom:16px;}
+.l-input::placeholder{color:rgba(255,255,255,.3);font-weight:400;text-transform:none;}
+.l-input:focus{border-color:var(--mag);}
+.l-input.normal-case{text-transform:none;font-size:1rem;font-weight:500;letter-spacing:0;}
+.btn-login{width:100%;padding:16px;background:var(--mag);border:none;border-radius:14px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:.2s;box-shadow:0 6px 20px var(--mag-glow);}
+.btn-login:active{transform:scale(.97);}
+.login-err{color:var(--mag);font-size:.82rem;font-weight:600;margin-top:12px;display:none;}
+.admin-hint{margin-top:18px;font-size:.75rem;color:rgba(255,255,255,.2);}
+
+/* ══ APP LAYOUT ══ */
+#s-app{display:none;}
+#s-app.active{display:block;}
+.topbar{background:var(--navy);padding:0 18px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 16px rgba(0,0,0,.25);}
+.tb-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.25rem;color:#fff;}
+.tb-brand span{color:var(--mag);}
+.tb-right{display:flex;align-items:center;gap:10px;}
+.tb-avatar{width:34px;height:34px;background:var(--mag);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#fff;font-size:.95rem;}
+.tb-ntid{font-size:.78rem;font-weight:700;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.06em;}
+.tb-logout{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;border-radius:8px;cursor:pointer;}
+.tb-logout:active{background:rgba(255,255,255,.15);}
+.admin-crown{font-size:.8rem;color:var(--yellow);margin-right:4px;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eee;display:flex;padding:8px 0 20px;z-index:200;box-shadow:0 -4px 20px rgba(0,0,0,.07);}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--gray);background:none;border:none;cursor:pointer;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:4px 0;}
+.nav-btn.active{color:var(--mag);}
+.nav-icon{font-size:1.3rem;}
+
+/* ── CONTENT ── */
+.page{display:none;padding:18px 16px 90px;max-width:640px;margin:0 auto;animation:fadeUp .3s ease;}
+.page.active{display:block;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+
+/* ── SECTIONS ── */
+.sec-title{font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:16px;}
+.sec-sub{color:var(--gray);font-size:.85rem;margin-top:-12px;margin-bottom:16px;}
+
+/* ── STAT CARDS ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.stat-card{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);border:1px solid var(--border);}
+.stat-card.accent{background:var(--mag);}
+.stat-card.accent .s-val,.stat-card.accent .s-lbl{color:#fff;}
+.stat-card.accent .s-lbl{color:rgba(255,255,255,.7);}
+.stat-card.dark{background:var(--navy);}
+.stat-card.dark .s-val,.stat-card.dark .s-lbl{color:#fff;}
+.stat-card.dark .s-lbl{color:rgba(255,255,255,.6);}
+.s-val{font-family:'Barlow Condensed',sans-serif;font-size:2.2rem;font-weight:900;color:var(--mag);display:block;line-height:1;}
+.s-lbl{font-size:.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.06em;margin-top:4px;display:block;}
+
+/* ── RECORD CARDS ── */
+.rec-card{background:#fff;border-radius:var(--radius);padding:16px;margin-bottom:12px;border-left:5px solid var(--orange);box-shadow:var(--card-shadow);cursor:pointer;transition:.15s;}
+.rec-card:active{transform:scale(.98);}
+.rec-card.done{border-left-color:var(--green);}
+.rec-card.inprog{border-left-color:var(--yellow);}
+.rc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.rc-name{font-weight:700;font-size:1rem;color:var(--navy);}
+.rc-ntid{font-size:.7rem;color:var(--gray);margin-top:2px;}
+.status-pill{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px;border-radius:50px;flex-shrink:0;}
+.sp-done{background:#D4F5E9;color:#007A4A;}
+.sp-prog{background:#FFF3CC;color:#7A5A00;}
+.sp-no{background:#FFE5D0;color:#C04800;}
+.rc-info{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem;color:var(--text2);}
+.rc-foot{margin-top:10px;padding-top:10px;border-top:1px dashed #eee;font-size:.72rem;color:var(--gray);display:flex;justify-content:space-between;}
+
+/* ── FORM ── */
+.form-card{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);margin-bottom:14px;}
+.form-section{font-family:'Barlow Condensed',sans-serif;font-size:.88rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mag);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--off);}
+.fg{margin-bottom:14px;}
+.fl{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray);margin-bottom:6px;}
+.fl .req{color:var(--mag);}
+.fi,.fs{width:100%;padding:13px 15px;border:2px solid #eee;border-radius:12px;font-family:'Barlow',sans-serif;font-size:.95rem;color:var(--text);background:var(--off);outline:none;transition:.2s;appearance:none;}
+.fi:focus,.fs:focus{border-color:var(--mag);background:#fff;box-shadow:0 0 0 4px var(--mag-glow);}
+.fs{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239B8FA0' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:40px;}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.status-toggle{display:flex;gap:8px;margin-top:6px;}
+.st-opt{flex:1;text-align:center;padding:12px 6px;border-radius:12px;border:2px solid #eee;cursor:pointer;font-size:.82rem;font-weight:700;transition:.2s;color:var(--gray);}
+.st-opt.sel{border-color:var(--mag);background:var(--mag-glow);color:var(--mag);}
+.st-opt.sel-green{border-color:var(--green);background:#D4F5E9;color:#007A4A;}
+.st-opt.sel-yellow{border-color:var(--yellow);background:#FFF3CC;color:#7A5A00;}
+.btn-submit{width:100%;padding:16px;background:var(--mag);border:none;border-radius:14px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;box-shadow:0 6px 20px var(--mag-glow);transition:.2s;}
+.btn-submit:active{transform:scale(.97);}
+
+/* ── FILTER CHIPS ── */
+.chip-bar{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;}
+.chip{flex-shrink:0;padding:7px 16px;border-radius:50px;border:2px solid #eee;background:#fff;font-size:.72rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);transition:.2s;}
+.chip.on{background:var(--mag);border-color:var(--mag);color:#fff;}
+
+/* ── MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,30,.5);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:flex-end;justify-content:center;}
+.modal-bg.hidden{display:none;}
+.modal-sheet{background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:540px;max-height:88vh;overflow-y:auto;padding:24px 20px 40px;animation:slideUp .28s ease;}
+@keyframes slideUp{from{transform:translateY(100%);}to{transform:none;}}
+.modal-handle{width:38px;height:4px;background:#eee;border-radius:2px;margin:0 auto 18px;}
+.modal-title{font-family:'Barlow Condensed',sans-serif;font-size:1.35rem;font-weight:800;color:var(--navy);margin-bottom:16px;}
+.d-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f2f2f2;font-size:.88rem;}
+.d-row:last-of-type{border:none;}
+.d-key{color:var(--gray);font-weight:500;}
+.d-val{color:var(--text);font-weight:700;text-align:right;max-width:58%;word-break:break-word;}
+.modal-btns{display:flex;gap:10px;margin-top:18px;}
+.btn-ghost{flex:1;padding:12px;border:2px solid var(--mag);border-radius:12px;color:var(--mag);background:none;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;}
+.btn-red{flex:1;padding:12px;border:none;border-radius:12px;background:#E53935;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;}
+
+/* ── ADMIN PANEL ── */
+.admin-bar{background:linear-gradient(90deg,var(--navy2),var(--navy));padding:12px 16px;border-radius:14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+.admin-badge{background:var(--yellow);color:#000;font-size:.7rem;font-weight:800;text-transform:uppercase;padding:4px 10px;border-radius:50px;letter-spacing:.06em;}
+.admin-bar-text{color:rgba(255,255,255,.7);font-size:.82rem;}
+.admin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+.admin-stat{background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:var(--card-shadow);}
+.as-val{font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:900;color:var(--mag);}
+.as-lbl{font-size:.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;}
+.rep-row{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;box-shadow:var(--card-shadow);}
+.rep-ava{width:38px;height:38px;border-radius:10px;background:var(--mag);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#fff;font-size:1rem;flex-shrink:0;}
+.rep-info{flex:1;}
+.rep-name{font-weight:700;font-size:.95rem;color:var(--navy);}
+.rep-stat{font-size:.78rem;color:var(--gray);}
+.rep-bar-wrap{width:60px;height:5px;background:#eee;border-radius:3px;margin-top:4px;}
+.rep-bar{height:5px;background:var(--mag);border-radius:3px;}
+.rep-count{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:var(--mag);flex-shrink:0;}
+.admin-search{width:100%;padding:12px 16px;border:2px solid #eee;border-radius:12px;font-family:'Barlow',sans-serif;font-size:.95rem;background:#fff;outline:none;margin-bottom:14px;transition:.2s;}
+.admin-search:focus{border-color:var(--mag);}
+.admin-tab-bar{display:flex;gap:8px;margin-bottom:16px;}
+.atab{padding:9px 18px;border-radius:50px;border:2px solid #eee;background:#fff;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);cursor:pointer;transition:.2s;}
+.atab.on{background:var(--navy);border-color:var(--navy);color:#fff;}
+.refresh-btn{background:var(--off);border:2px solid var(--border);border-radius:10px;padding:8px 14px;font-size:.75rem;font-weight:700;color:var(--gray);cursor:pointer;margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* ── LEADERBOARD ── */
+.lb-row{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;box-shadow:var(--card-shadow);}
+.lb-rank{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.35rem;width:32px;text-align:center;}
+.rank-1{color:#FFB900;} .rank-2{color:#A8A8B8;} .rank-3{color:#CD7F32;}
+.you-tag{background:var(--mag);color:#fff;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:50px;margin-left:6px;vertical-align:middle;}
+.lb-bar-wrap{width:64px;height:5px;background:#eee;border-radius:3px;margin-top:5px;}
+.lb-bar{height:5px;background:var(--mag);border-radius:3px;transition:width .5s ease;}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:50px 20px;color:var(--gray);}
+.empty-icon{font-size:3rem;margin-bottom:12px;opacity:.4;}
+.empty p{font-size:.9rem;}
+
+/* ── STATUS UPDATE SECTION IN MODAL ── */
+.status-update-box{background:var(--off);border-radius:14px;padding:14px;margin:16px 0 4px;}
+.status-update-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray);margin-bottom:10px;display:block;}
+.status-btns{display:flex;gap:8px;}
+.s-btn{flex:1;padding:12px 6px;border-radius:12px;border:2px solid transparent;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:.88rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;transition:.2s;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.2;}
+.s-btn .s-icon{font-size:1.3rem;}
+.s-btn-done{background:#D4F5E9;color:#007A4A;border-color:#A8E6CC;}
+.s-btn-done:active,.s-btn-done.current{background:#00C07A;color:#fff;border-color:#00C07A;box-shadow:0 4px 14px rgba(0,192,122,.35);}
+.s-btn-prog{background:#FFF3CC;color:#7A5A00;border-color:#FFE08A;}
+.s-btn-prog:active,.s-btn-prog.current{background:#FFB900;color:#fff;border-color:#FFB900;box-shadow:0 4px 14px rgba(255,185,0,.35);}
+.s-btn-no{background:#FFE5D0;color:#C04800;border-color:#FFBE99;}
+.s-btn-no:active,.s-btn-no.current{background:#FF6B35;color:#fff;border-color:#FF6B35;box-shadow:0 4px 14px rgba(255,107,53,.35);}
+.updating-pulse{animation:updatingPulse .6s ease infinite alternate;}
+@keyframes updatingPulse{from{opacity:1;}to{opacity:.5;}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-overlay"><div class="spin"></div><div class="loading-text" id="loading-msg">Connecting…</div></div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL -->
+<div class="modal-bg hidden" id="modal" onclick="closeModalClick(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title">Record</div>
+    <div id="modal-body"></div>
+    <!-- STATUS UPDATE SECTION -->
+    <div class="status-update-box" id="modal-status-box">
+      <span class="status-update-label">⚡ Update Migration Status</span>
+      <div class="status-btns">
+        <button class="s-btn s-btn-done" id="sbtn-yes" onclick="updateStatus('Yes')">
+          <span class="s-icon">✅</span>Completed
+        </button>
+        <button class="s-btn s-btn-prog" id="sbtn-prog" onclick="updateStatus('In Progress')">
+          <span class="s-icon">🔄</span>In Progress
+        </button>
+        <button class="s-btn s-btn-no" id="sbtn-no" onclick="updateStatus('No')">
+          <span class="s-icon">❌</span>Not Yet
+        </button>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn-red" id="modal-del" onclick="deleteRecord()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ LOGIN ══════════════════ -->
+<div id="s-login" class="screen active">
+  <div class="login-wrap" style="margin:auto;">
+    <div class="login-logo">T↗</div>
+    <div class="login-title">Migration Tracker</div>
+    <div class="login-sub">Metro by T-Mobile → T-Mobile</div>
+
+    <label class="l-label">Your NTID</label>
+    <input id="l-ntid" class="l-input" type="text" placeholder="e.g. UPO12345" autocomplete="off" autocapitalize="characters" onkeydown="if(event.key==='Enter')doLogin()"/>
+
+    <label class="l-label">Your Full Name</label>
+    <input id="l-name" class="l-input normal-case" type="text" placeholder="First Last" onkeydown="if(event.key==='Enter')doLogin()"/>
+
+    <button class="btn-login" onclick="doLogin()">Enter Dashboard</button>
+    <div class="login-err" id="l-err">Please fill in all fields.</div>
+    <div class="admin-hint">Admin? Use your admin NTID above.</div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="s-app" class="screen">
+  <div class="topbar">
+    <div class="tb-brand">Metro<span>→T</span></div>
+    <div class="tb-right">
+      <div class="tb-ntid" id="tb-ntid"></div>
+      <div class="tb-avatar" id="tb-avatar">?</div>
+      <button class="tb-logout" onclick="doLogout()">Out</button>
+    </div>
+  </div>
+
+  <!-- PAGES -->
+  <div id="p-dashboard" class="page active">
+    <h2 id="greet" style="font-family:'Barlow Condensed';font-size:2rem;font-weight:900;margin-bottom:4px;"></h2>
+    <p style="color:var(--gray);margin-bottom:20px;font-size:.9rem;">Your migration activity</p>
+    <div class="stats-grid">
+      <div class="stat-card accent"><span class="s-val" id="d-total">0</span><span class="s-lbl">My Migrations</span></div>
+      <div class="stat-card dark"><span class="s-val" id="d-done">0</span><span class="s-lbl">Completed</span></div>
+      <div class="stat-card"><span class="s-val" id="d-prog" style="color:var(--yellow)">0</span><span class="s-lbl">In Progress</span></div>
+      <div class="stat-card"><span class="s-val" id="d-lines" style="color:var(--mag)">0</span><span class="s-lbl">Lines Moved</span></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="sec-title" style="margin:0;">Recent</div>
+      <button class="refresh-btn" onclick="loadMyRecords(true)"><span class="sync-dot"></span> Refresh</button>
+    </div>
+    <div id="dash-list"></div>
+  </div>
+
+  <div id="p-add" class="page">
+    <div class="sec-title">New Migration</div>
+    <div class="sec-sub">All fields marked * are required</div>
+
+    <div class="form-card">
+      <div class="form-section">📋 Customer Info</div>
+      <div class="fg">
+        <label class="fl">Customer Name <span class="req">*</span></label>
+        <input id="f-name" class="fi" type="text" placeholder="Last, First"/>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Metro Phone # <span class="req">*</span></label>
+          <input id="f-phone" class="fi" type="tel" placeholder="6175550100" maxlength="10"/>
+        </div>
+        <div class="fg">
+          <label class="fl">Zip Code</label>
+          <input id="f-zip" class="fi" type="text" placeholder="02148" maxlength="5"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section">📱 Metro Account</div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Metro Account # <span class="req">*</span></label>
+          <input id="f-metro-acct" class="fi" type="text" placeholder="Account #"/>
+        </div>
+        <div class="fg">
+          <label class="fl">Metro / Transfer PIN</label>
+          <input id="f-pin" class="fi" type="password" placeholder="PIN" maxlength="8"/>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Metro Monthly Plan</label>
+        <input id="f-metro-plan" class="fi" type="text" placeholder="e.g. $40 Unlimited"/>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section">📶 T-Mobile Order</div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">T-Mobile Account #</label>
+          <input id="f-tmo-acct" class="fi" type="text" placeholder="TMO Account"/>
+        </div>
+        <div class="fg">
+          <label class="fl">T-Mobile PIN</label>
+          <input id="f-tmo-pin" class="fi" type="password" placeholder="PIN" maxlength="8"/>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">T-Mobile Monthly Plan</label>
+        <input id="f-tmo-plan" class="fi" type="text" placeholder="e.g. Go5G Plus $60"/>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Order ID</label>
+          <input id="f-order-id" class="fi" type="text" placeholder="Order #"/>
+        </div>
+        <div class="fg">
+          <label class="fl">Date Ordered</label>
+          <input id="f-date" class="fi" type="date"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section">📦 Devices & Status</div>
+      <div class="fg">
+        <label class="fl">Devices Ordered</label>
+        <input id="f-devices" class="fi" type="text" placeholder="iPhone 15 x2, Galaxy S24 x1"/>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Lines Migrated</label>
+          <input id="f-lines" class="fi" type="number" placeholder="0" min="0" max="20"/>
+        </div>
+        <div class="fg">
+          <label class="fl">Migration Status <span class="req">*</span></label>
+          <select id="f-status" class="fs">
+            <option value="">Select…</option>
+            <option value="Yes">✅ Completed</option>
+            <option value="In Progress">🔄 In Progress</option>
+            <option value="No">❌ Not Yet</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-submit" onclick="submitRecord()">💾 Save Migration to Cloud</button>
+  </div>
+
+  <div id="p-records" class="page">
+    <div class="sec-title">My Records</div>
+    <div class="chip-bar">
+      <div class="chip on" data-f="all" onclick="setFilter(this)">All</div>
+      <div class="chip" data-f="Yes" onclick="setFilter(this)">✅ Done</div>
+      <div class="chip" data-f="In Progress" onclick="setFilter(this)">🔄 Progress</div>
+      <div class="chip" data-f="No" onclick="setFilter(this)">❌ Pending</div>
+    </div>
+    <div id="rec-list"></div>
+  </div>
+
+  <div id="p-leaderboard" class="page">
+    <div class="sec-title">Team Board 🏆</div>
+    <div class="sec-sub">Ranked by completed migrations</div>
+    <div id="lb-list"></div>
+  </div>
+
+  <!-- ADMIN PAGE -->
+  <div id="p-admin" class="page">
+    <div class="admin-bar">
+      <span class="admin-badge">⚡ Admin</span>
+      <span class="admin-bar-text">Full visibility into all rep records</span>
+    </div>
+
+    <div class="admin-stats">
+      <div class="admin-stat"><div class="as-val" id="a-total">—</div><div class="as-lbl">Total</div></div>
+      <div class="admin-stat"><div class="as-val" id="a-done" style="color:var(--green)">—</div><div class="as-lbl">Complete</div></div>
+      <div class="admin-stat"><div class="as-val" id="a-reps">—</div><div class="as-lbl">Reps</div></div>
+    </div>
+
+    <div class="admin-tab-bar">
+      <div class="atab on" id="at-all" onclick="adminTab('all')">All Records</div>
+      <div class="atab" id="at-reps" onclick="adminTab('reps')">By Rep</div>
+    </div>
+
+    <div id="admin-all-view">
+      <input class="admin-search" id="admin-search" type="text" placeholder="🔍  Search by name, phone, NTID…" oninput="renderAdminAll()"/>
+      <div id="admin-rec-list"></div>
+    </div>
+
+    <div id="admin-reps-view" style="display:none;">
+      <div id="admin-rep-list"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="nav-btn active" id="nb-dashboard" onclick="switchPage('dashboard',this)">
+      <span class="nav-icon">⊞</span>Dashboard
+    </button>
+    <button class="nav-btn" id="nb-add" onclick="switchPage('add',this)">
+      <span class="nav-icon">＋</span>Add
+    </button>
+    <button class="nav-btn" id="nb-records" onclick="switchPage('records',this)">
+      <span class="nav-icon">📋</span>Records
+    </button>
+    <button class="nav-btn" id="nb-leaderboard" onclick="switchPage('leaderboard',this)">
+      <span class="nav-icon">📈</span>Team
+    </button>
+    <button class="nav-btn" id="nb-admin" style="display:none;" onclick="switchPage('admin',this)">
+      <span class="nav-icon">👑</span>Admin
+    </button>
+  </nav>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONFIG  — update these two values only
+// ═══════════════════════════════════════════
+const API_URL   = "https://script.google.com/macros/s/AKfycbzmGSvPl0zCiJ3hUS93yldK3YHTMvcWkodEdeJcKexP-aQ7ebx14X4Swo82QXHoPHmqXw/execadmin";
+const ADMIN_IDS = ["UPO63536","ADMIN","SUPERVISOR"];   // ← Add your admin NTIDs here (UPPERCASE)
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let currentUser  = null;
+let myRecords    = [];
+let allRecords   = [];   // admin only
+let filterVal    = 'all';
+let modalId      = null;
+let adminView    = 'all';
+let isAdmin      = false;
+
+// ═══════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════
+function loading(show, msg='Connecting to Google Sheets…'){
+  const el = document.getElementById('loading-overlay');
+  document.getElementById('loading-msg').textContent = msg;
+  el.classList.toggle('show', show);
+}
+let toastTimer;
+function toast(msg, type=''){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.className='', 3000);
+}
+function fmtPhone(p){ return p&&p.length===10?`(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`:p||'—'; }
+function fmtDate(d){ if(!d)return '—'; try{ return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch{return d;} }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function statusPill(s){
+  if(s==='Yes') return '<span class="status-pill sp-done">Done</span>';
+  if(s==='In Progress') return '<span class="status-pill sp-prog">In Progress</span>';
+  return '<span class="status-pill sp-no">Pending</span>';
+}
+function cardClass(s){ return s==='Yes'?'done':s==='In Progress'?'inprog':''; }
+
+// ═══════════════════════════════════════════
+//  LOGIN / LOGOUT
+// ═══════════════════════════════════════════
+async function doLogin(){
+  const ntid = document.getElementById('l-ntid').value.trim().toUpperCase();
+  const name = document.getElementById('l-name').value.trim();
+  const errEl = document.getElementById('l-err');
+  if(!ntid||!name){ errEl.style.display='block'; return; }
+  errEl.style.display='none';
+
+  isAdmin = ADMIN_IDS.includes(ntid);
+  currentUser = { ntid, name };
+
+  loading(true, 'Loading your records…');
+  try {
+    await loadMyRecords(false);
+    if(isAdmin) await loadAllRecords();
+
+    document.getElementById('tb-ntid').textContent = ntid;
+    document.getElementById('tb-avatar').textContent = name.charAt(0).toUpperCase();
+    const h = new Date().getHours();
+    const g = h<12?'Morning':h<17?'Afternoon':'Evening';
+    document.getElementById('greet').textContent = `Good ${g}, ${name.split(' ')[0]}! 👋`;
+
+    if(isAdmin){
+      document.getElementById('nb-admin').style.display = '';
+      document.getElementById('tb-ntid').innerHTML = `<span class="admin-crown">👑</span>${ntid}`;
+    }
+
+    document.getElementById('s-login').classList.remove('active');
+    document.getElementById('s-app').classList.add('active');
+    switchPage('dashboard', document.getElementById('nb-dashboard'));
+  } catch(e){
+    toast('❌ Could not connect to Google Sheets. Check your internet.','err');
+    console.error(e);
+  } finally {
+    loading(false);
+  }
+}
+
+function doLogout(){
+  currentUser = null; myRecords = []; allRecords = []; isAdmin = false;
+  document.getElementById('s-app').classList.remove('active');
+  document.getElementById('s-login').classList.add('active');
+  document.getElementById('l-ntid').value='';
+  document.getElementById('l-name').value='';
+  document.getElementById('nb-admin').style.display='none';
+}
+
+// ═══════════════════════════════════════════
+//  API CALLS
+// ═══════════════════════════════════════════
+function parseRows(rows){
+  // Columns: ID, SubmittedAt, NTID, Name, CustomerName, MetroPhone, MetroAcct,
+  //          Pin, Devices, MetroPlan, TMoPlan, DateOrdered, Zip, OrderId,
+  //          TmoAcct, LinesMigrated, MigrationDone
+  return rows.map(r=>({
+    id:             r[0]||'',
+    submittedAt:    r[1]||'',
+    ntid:           r[2]||'',
+    repName:        r[3]||'',
+    customerName:   r[4]||'',
+    metroPhone:     r[5]||'',
+    metroAcct:      r[6]||'',
+    pin:            r[7]||'',
+    devices:        r[8]||'',
+    metroPlan:      r[9]||'',
+    tmoPlan:        r[10]||'',
+    dateOrdered:    r[11]||'',
+    zip:            r[12]||'',
+    orderId:        r[13]||'',
+    tmoAcct:        r[14]||'',
+    linesMigrated:  parseInt(r[15])||0,
+    migrationDone:  r[16]||'No',
+  }));
+}
+
+async function loadMyRecords(showUI=true){
+  if(showUI) loading(true,'Refreshing your records…');
+  try {
+    const res = await fetch(`${API_URL}?action=getRecords&ntid=${currentUser.ntid}`);
+    const data = await res.json();
+    myRecords = parseRows(data.rows||data||[]);
+    renderDashboard();
+    renderMyRecords();
+    renderLeaderboard();
+    if(showUI) toast('✅ Records refreshed','ok');
+  } catch(e){
+    if(showUI) toast('❌ Refresh failed','err');
+    console.error(e);
+  } finally {
+    if(showUI) loading(false);
+  }
+}
+
+async function loadAllRecords(){
+  try {
+    const res = await fetch(`${API_URL}?action=getAllRecords&adminKey=TMOBILE_ADMIN_2024`);
+    const data = await res.json();
+    allRecords = parseRows(data.rows||data||[]);
+    renderAdmin();
+  } catch(e){ console.error('Admin load error',e); }
+}
+
+async function submitRecord(){
+  const name   = document.getElementById('f-name').value.trim();
+  const phone  = document.getElementById('f-phone').value.trim();
+  const metro  = document.getElementById('f-metro-acct').value.trim();
+  const status = document.getElementById('f-status').value;
+
+  if(!name)  { toast('⚠️ Customer name required','warn'); return; }
+  if(!phone) { toast('⚠️ Metro phone required','warn'); return; }
+  if(!metro) { toast('⚠️ Metro account # required','warn'); return; }
+  if(!status){ toast('⚠️ Select migration status','warn'); return; }
+
+  const rec = {
+    id:            uid(),
+    submittedAt:   new Date().toISOString(),
+    ntid:          currentUser.ntid,
+    repName:       currentUser.name,
+    customerName:  name,
+    metroPhone:    phone,
+    metroAcct:     metro,
+    pin:           document.getElementById('f-pin').value.trim(),
+    devices:       document.getElementById('f-devices').value.trim(),
+    metroPlan:     document.getElementById('f-metro-plan').value.trim(),
+    tmoPlan:       document.getElementById('f-tmo-plan').value.trim(),
+    dateOrdered:   document.getElementById('f-date').value,
+    zip:           document.getElementById('f-zip').value.trim(),
+    orderId:       document.getElementById('f-order-id').value.trim(),
+    tmoAcct:       document.getElementById('f-tmo-acct').value.trim(),
+    linesMigrated: parseInt(document.getElementById('f-lines').value)||0,
+    migrationDone: status,
+    tmoPin:        document.getElementById('f-tmo-pin').value.trim(),
+  };
+
+  loading(true,'Saving to Google Sheets…');
+  try {
+    await fetch(API_URL, {
+      method:'POST', mode:'no-cors', cache:'no-cache',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'addRecord', data: rec })
+    });
+    myRecords.unshift(rec);
+    if(isAdmin) allRecords.unshift(rec);
+    renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
+    clearForm();
+    toast('✅ Migration saved to Google Sheets!','ok');
+    switchPage('dashboard', document.getElementById('nb-dashboard'));
+  } catch(e){
+    toast('❌ Save failed. Try again.','err');
+    console.error(e);
+  } finally { loading(false); }
+}
+
+async function deleteRecord(){
+  if(!modalId) return;
+  if(!confirm('Delete this record permanently?')) return;
+  loading(true,'Deleting…');
+  try {
+    await fetch(API_URL, {
+      method:'POST', mode:'no-cors', cache:'no-cache',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'deleteRecord', id: modalId, ntid: currentUser.ntid })
+    });
+    myRecords = myRecords.filter(r=>r.id!==modalId);
+    if(isAdmin) allRecords = allRecords.filter(r=>r.id!==modalId);
+    closeModal();
+    renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
+    toast('Record deleted','ok');
+  } catch(e){ toast('Delete failed','err'); console.error(e); }
+  finally { loading(false); }
+}
+
+// ═══════════════════════════════════════════
+//  RENDER — DASHBOARD
+// ═══════════════════════════════════════════
+function renderDashboard(){
+  const done = myRecords.filter(r=>r.migrationDone==='Yes').length;
+  const prog = myRecords.filter(r=>r.migrationDone==='In Progress').length;
+  const lines = myRecords.reduce((s,r)=>s+(r.linesMigrated||0),0);
+  document.getElementById('d-total').textContent = myRecords.length;
+  document.getElementById('d-done').textContent  = done;
+  document.getElementById('d-prog').textContent  = prog;
+  document.getElementById('d-lines').textContent = lines;
+  const recent = myRecords.slice(0,5);
+  document.getElementById('dash-list').innerHTML = recent.length
+    ? recent.map(r=>recCardHTML(r, false)).join('')
+    : `<div class="empty"><div class="empty-icon">📋</div><p>No records yet.<br>Tap <b>Add</b> to log a migration.</p></div>`;
+}
+
+// ═══════════════════════════════════════════
+//  RENDER — MY RECORDS
+// ═══════════════════════════════════════════
+function setFilter(el){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  filterVal = el.dataset.f;
+  renderMyRecords();
+}
+function renderMyRecords(){
+  let recs = myRecords;
+  if(filterVal!=='all') recs = recs.filter(r=>r.migrationDone===filterVal);
+  document.getElementById('rec-list').innerHTML = recs.length
+    ? recs.map(r=>recCardHTML(r, false)).join('')
+    : `<div class="empty"><div class="empty-icon">🔍</div><p>No records match this filter.</p></div>`;
+}
+
+function recCardHTML(r, showRep=false){
+  const cc = cardClass(r.migrationDone);
+  const dt = r.dateOrdered ? fmtDate(r.dateOrdered) : (r.submittedAt ? fmtDate(r.submittedAt.split('T')[0]) : '—');
+  return `<div class="rec-card ${cc}" onclick="openModal('${r.id}')">
+    <div class="rc-top">
+      <div>
+        <div class="rc-name">${r.customerName||'—'}</div>
+        ${showRep?`<div class="rc-ntid">Rep: ${r.ntid||'—'} · ${r.repName||''}</div>`:`<div class="rc-ntid">${fmtPhone(r.metroPhone)}</div>`}
+      </div>
+      ${statusPill(r.migrationDone)}
+    </div>
+    <div class="rc-info">
+      <span>📱 ${fmtPhone(r.metroPhone)}</span>
+      <span>📦 ${r.tmoPlan||'—'}</span>
+      <span>📶 ${r.linesMigrated||0} line${r.linesMigrated!==1?'s':''}</span>
+      <span>🗓 ${dt}</span>
+    </div>
+    <div class="rc-foot">
+      <span>Order: ${r.orderId||'—'}</span>
+      <span>${r.zip||''}</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+//  RENDER — LEADERBOARD
+// ═══════════════════════════════════════════
+function renderLeaderboard(){
+  // Build from all known records (my own for non-admin, all for admin)
+  const src = isAdmin ? allRecords : myRecords;
+  // We want team-wide; if not admin we'll still try
+  const counts = {};
+  const names  = {};
+  src.filter(r=>r.migrationDone==='Yes').forEach(r=>{
+    counts[r.ntid] = (counts[r.ntid]||0)+1;
+    if(r.repName) names[r.ntid] = r.repName;
+  });
+  // include own record
+  if(!counts[currentUser.ntid]){
+    const myDone = myRecords.filter(r=>r.migrationDone==='Yes').length;
+    if(myDone>0){ counts[currentUser.ntid]=myDone; names[currentUser.ntid]=currentUser.name; }
+  }
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const max = sorted[0]?.[1]||1;
+  const ranks = ['🥇','🥈','🥉'];
+  const rcls  = ['rank-1','rank-2','rank-3'];
+  if(!sorted.length){
+    document.getElementById('lb-list').innerHTML=`<div class="empty"><div class="empty-icon">🏆</div><p>No completed migrations yet.<br>Be the first!</p></div>`;
+    return;
+  }
+  document.getElementById('lb-list').innerHTML = sorted.map(([ntid,cnt],i)=>{
+    const isMe = ntid===currentUser.ntid;
+    const pct  = Math.round((cnt/max)*100);
+    return `<div class="lb-row" style="${isMe?'border:2px solid var(--mag);':''}">
+      <div class="lb-rank ${rcls[i]||''}">${ranks[i]||`#${i+1}`}</div>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:.95rem;">${names[ntid]||ntid}${isMe?'<span class="you-tag">YOU</span>':''}</div>
+        <div style="font-size:.75rem;color:var(--gray);">${ntid} · ${cnt} migration${cnt!==1?'s':''}</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:${pct}%"></div></div>
+      </div>
+      <div style="font-family:'Barlow Condensed';font-weight:900;font-size:1.3rem;color:var(--mag);">${cnt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+//  RENDER — ADMIN
+// ═══════════════════════════════════════════
+function adminTab(t){
+  adminView = t;
+  document.getElementById('at-all').classList.toggle('on', t==='all');
+  document.getElementById('at-reps').classList.toggle('on', t==='reps');
+  document.getElementById('admin-all-view').style.display = t==='all'?'':'none';
+  document.getElementById('admin-reps-view').style.display = t==='reps'?'':'none';
+  if(t==='reps') renderAdminReps();
+  else renderAdminAll();
+}
+function renderAdmin(){
+  const done  = allRecords.filter(r=>r.migrationDone==='Yes').length;
+  const reps  = new Set(allRecords.map(r=>r.ntid)).size;
+  document.getElementById('a-total').textContent = allRecords.length;
+  document.getElementById('a-done').textContent  = done;
+  document.getElementById('a-reps').textContent  = reps;
+  renderAdminAll(); renderAdminReps(); renderLeaderboard();
+}
+function renderAdminAll(){
+  const q = (document.getElementById('admin-search')?.value||'').toLowerCase();
+  let recs = allRecords;
+  if(q) recs = recs.filter(r=>[r.customerName,r.metroPhone,r.ntid,r.repName,r.orderId].some(v=>(v||'').toLowerCase().includes(q)));
+  document.getElementById('admin-rec-list').innerHTML = recs.length
+    ? recs.map(r=>recCardHTML(r, true)).join('')
+    : `<div class="empty"><p>No records match.</p></div>`;
+}
+function renderAdminReps(){
+  const counts={}, names={}, lines={};
+  allRecords.forEach(r=>{
+    counts[r.ntid]=(counts[r.ntid]||0)+(r.migrationDone==='Yes'?1:0);
+    lines[r.ntid]=(lines[r.ntid]||0)+(r.linesMigrated||0);
+    if(r.repName) names[r.ntid]=r.repName;
+  });
+  const all = {};
+  allRecords.forEach(r=>{ all[r.ntid]=(all[r.ntid]||0)+1; });
+  const sorted = Object.keys(all).sort((a,b)=>(counts[b]||0)-(counts[a]||0));
+  const maxC = Math.max(...Object.values(counts),1);
+  document.getElementById('admin-rep-list').innerHTML = sorted.map(ntid=>{
+    const pct = Math.round(((counts[ntid]||0)/maxC)*100);
+    return `<div class="rep-row">
+      <div class="rep-ava">${(names[ntid]||ntid).charAt(0).toUpperCase()}</div>
+      <div class="rep-info">
+        <div class="rep-name">${names[ntid]||'—'} <span style="color:var(--gray);font-size:.78rem;">(${ntid})</span></div>
+        <div class="rep-stat">${all[ntid]} total · ${counts[ntid]||0} done · ${lines[ntid]||0} lines</div>
+        <div class="rep-bar-wrap"><div class="rep-bar" style="width:${pct}%"></div></div>
+      </div>
+      <div class="rep-count">${counts[ntid]||0}</div>
+    </div>`;
+  }).join('') || `<div class="empty"><p>No reps found.</p></div>`;
+}
+
+// ═══════════════════════════════════════════
+//  MODAL
+// ═══════════════════════════════════════════
+function openModal(id){
+  const src = isAdmin ? allRecords : myRecords;
+  const r = src.find(x=>x.id===id);
+  if(!r) return;
+  modalId = id;
+  document.getElementById('modal-title').textContent = r.customerName||'Record';
+  const rows=[
+    ['Customer Name',     r.customerName],
+    ['Metro Phone',       fmtPhone(r.metroPhone)],
+    ['Metro Account #',   r.metroAcct],
+    ['Metro Plan',        r.metroPlan],
+    ['T-Mobile Account',  r.tmoAcct],
+    ['T-Mobile Plan',     r.tmoPlan],
+    ['Order ID',          r.orderId],
+    ['Date Ordered',      fmtDate(r.dateOrdered)],
+    ['Devices',           r.devices],
+    ['Lines Migrated',    r.linesMigrated],
+    ['Zip Code',          r.zip],
+    ['Rep NTID',          r.ntid],
+    ['Rep Name',          r.repName],
+    ['Submitted',         r.submittedAt?new Date(r.submittedAt).toLocaleString():'—'],
+  ];
+  document.getElementById('modal-body').innerHTML = rows.map(([k,v])=>
+    `<div class="d-row"><span class="d-key">${k}</span><span class="d-val">${v||'—'}</span></div>`
+  ).join('');
+
+  // Highlight current status button
+  setStatusBtnHighlight(r.migrationDone);
+
+  // Show status update box only if this rep owns the record or is admin
+  const canEdit = isAdmin || r.ntid===currentUser.ntid;
+  document.getElementById('modal-status-box').style.display = canEdit ? '' : 'none';
+
+  // Only show delete if own record or admin
+  const canDel = isAdmin || r.ntid===currentUser.ntid;
+  document.getElementById('modal-del').style.display = canDel?'':'none';
+  document.getElementById('modal').classList.remove('hidden');
+}
+
+function setStatusBtnHighlight(status){
+  document.getElementById('sbtn-yes').classList.toggle('current', status==='Yes');
+  document.getElementById('sbtn-prog').classList.toggle('current', status==='In Progress');
+  document.getElementById('sbtn-no').classList.toggle('current', status==='No');
+}
+
+async function updateStatus(newStatus){
+  if(!modalId) return;
+  const src = isAdmin ? allRecords : myRecords;
+  const r = src.find(x=>x.id===modalId);
+  if(!r) return;
+  if(r.migrationDone === newStatus){ toast('Already set to this status','warn'); return; }
+
+  // Optimistic UI
+  const oldStatus = r.migrationDone;
+  r.migrationDone = newStatus;
+  setStatusBtnHighlight(newStatus);
+
+  // Update in myRecords too if admin viewing allRecords
+  const myR = myRecords.find(x=>x.id===modalId);
+  if(myR) myR.migrationDone = newStatus;
+
+  // Pulse the buttons to show saving
+  const box = document.getElementById('modal-status-box');
+  box.classList.add('updating-pulse');
+
+  try {
+    await fetch(API_URL, {
+      method:'POST', mode:'no-cors', cache:'no-cache',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'updateStatus', id: modalId, ntid: currentUser.ntid, status: newStatus })
+    });
+
+    // Re-render all views with updated status
+    renderDashboard();
+    renderMyRecords();
+    if(isAdmin) renderAdmin();
+
+    const labels = { 'Yes':'✅ Marked as Completed!', 'In Progress':'🔄 Marked as In Progress', 'No':'❌ Marked as Not Completed' };
+    toast(labels[newStatus]||'Status updated', 'ok');
+  } catch(e){
+    // Revert on failure
+    r.migrationDone = oldStatus;
+    if(myR) myR.migrationDone = oldStatus;
+    setStatusBtnHighlight(oldStatus);
+    toast('❌ Update failed. Try again.','err');
+    console.error(e);
+  } finally {
+    box.classList.remove('updating-pulse');
+  }
+}
+
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); modalId=null; }
+function closeModalClick(e){ if(e.target===document.getElementById('modal')) closeModal(); }
+
+// ═══════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════
+function switchPage(page, btn){
+  ['dashboard','add','records','leaderboard','admin'].forEach(p=>{
+    document.getElementById('p-'+p).classList.remove('active');
+  });
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('p-'+page).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(page==='add') document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  if(page==='leaderboard'){ if(isAdmin) loadAllRecords(); else renderLeaderboard(); }
+  if(page==='admin'){ loading(true,'Loading all records…'); loadAllRecords().finally(()=>loading(false)); }
+}
+
+function clearForm(){
+  ['f-name','f-phone','f-zip','f-metro-acct','f-pin','f-metro-plan',
+   'f-tmo-acct','f-tmo-pin','f-tmo-plan','f-order-id','f-date','f-devices','f-lines']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('f-status').value='';
+}
+</script>
+</body>
+</html>
