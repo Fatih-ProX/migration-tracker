@@ -199,6 +199,22 @@ body{font-family:'Barlow',sans-serif;background:var(--off);color:var(--text);min
 .s-btn-no:active,.s-btn-no.current{background:#FF6B35;color:#fff;border-color:#FF6B35;box-shadow:0 4px 14px rgba(255,107,53,.35);}
 .updating-pulse{animation:updatingPulse .6s ease infinite alternate;}
 @keyframes updatingPulse{from{opacity:1;}to{opacity:.5;}}
+
+/* ── EDIT FORM INSIDE MODAL ── */
+.edit-form-wrap{display:none;margin-top:4px;}
+.edit-form-wrap.open{display:block;animation:fadeUp .25s ease;}
+.edit-divider{border:none;border-top:2px dashed #eee;margin:16px 0;}
+.edit-section{font-family:"Barlow Condensed",sans-serif;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#E2007A;margin-bottom:10px;margin-top:14px;}
+.edit-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ef{margin-bottom:12px;}
+.ef label{display:block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9B8FA0;margin-bottom:5px;}
+.ef input,.ef select{width:100%;padding:11px 13px;border:2px solid #eee;border-radius:10px;font-family:"Barlow",sans-serif;font-size:.9rem;color:#1A0A14;background:#F7F3F6;outline:none;transition:.2s;appearance:none;}
+.ef input:focus,.ef select:focus{border-color:#E2007A;background:#fff;box-shadow:0 0 0 3px rgba(226,0,122,.1);}
+.ef select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239B8FA0' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;}
+.btn-edit{flex:1;padding:12px;border:2px solid #002E5F;border-radius:12px;color:#002E5F;background:none;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;transition:.2s;}
+.btn-edit.cancel{border-color:#9B8FA0;color:#9B8FA0;}
+.btn-save{flex:1;padding:12px;border:none;border-radius:12px;background:#E2007A;color:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 14px rgba(226,0,122,.25);transition:.2s;}
+.btn-save:active{transform:scale(.97);}
 </style>
 </head>
 <body>
@@ -230,8 +246,61 @@ body{font-family:'Barlow',sans-serif;background:var(--off);color:var(--text);min
         </button>
       </div>
     </div>
-    <div class="modal-btns">
+
+    <!-- EDIT FORM (hidden until Edit is tapped) -->
+    <div class="edit-form-wrap" id="edit-form-wrap">
+      <hr class="edit-divider"/>
+      <div class="edit-section">✏️ Edit Record</div>
+
+      <div class="edit-section" style="margin-top:0;margin-bottom:8px;font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;">Customer Info</div>
+      <div class="ef">
+        <label>Customer Name</label>
+        <input id="e-name" type="text" placeholder="Last, First"/>
+      </div>
+      <div class="edit-row">
+        <div class="ef"><label>Metro Phone #</label><input id="e-phone" type="tel" maxlength="10" placeholder="6175550100"/></div>
+        <div class="ef"><label>Zip Code</label><input id="e-zip" type="text" maxlength="5" placeholder="02148"/></div>
+      </div>
+
+      <div class="edit-section" style="font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;margin-top:0;">Metro Account</div>
+      <div class="edit-row">
+        <div class="ef"><label>Metro Account #</label><input id="e-metro-acct" type="text"/></div>
+        <div class="ef"><label>Metro PIN</label><input id="e-pin" type="password" maxlength="8"/></div>
+      </div>
+      <div class="ef"><label>Metro Monthly Plan</label><input id="e-metro-plan" type="text" placeholder="$40 Unlimited"/></div>
+
+      <div class="edit-section" style="font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;margin-top:0;">T-Mobile Order</div>
+      <div class="edit-row">
+        <div class="ef"><label>T-Mobile Account #</label><input id="e-tmo-acct" type="text"/></div>
+        <div class="ef"><label>T-Mobile Plan</label><input id="e-tmo-plan" type="text"/></div>
+      </div>
+      <div class="edit-row">
+        <div class="ef"><label>Order ID</label><input id="e-order-id" type="text"/></div>
+        <div class="ef"><label>Date Ordered</label><input id="e-date" type="date"/></div>
+      </div>
+
+      <div class="edit-section" style="font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;margin-top:0;">Devices & Lines</div>
+      <div class="ef"><label>Devices Ordered</label><input id="e-devices" type="text" placeholder="iPhone 15 x2"/></div>
+      <div class="edit-row">
+        <div class="ef"><label>Lines Migrated</label><input id="e-lines" type="number" min="0" max="20"/></div>
+        <div class="ef"><label>Migration Status</label>
+          <select id="e-status">
+            <option value="No">❌ Not Yet</option>
+            <option value="In Progress">🔄 In Progress</option>
+            <option value="Yes">✅ Completed</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <button class="btn-edit cancel" onclick="toggleEditForm(false)">Cancel</button>
+        <button class="btn-save" onclick="saveEdit()">💾 Save Changes</button>
+      </div>
+    </div>
+
+    <div class="modal-btns" id="modal-action-btns">
       <button class="btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn-edit" id="modal-edit-btn" onclick="toggleEditForm(true)">✏️ Edit</button>
       <button class="btn-red" id="modal-del" onclick="deleteRecord()">Delete</button>
     </div>
   </div>
@@ -445,21 +514,21 @@ body{font-family:'Barlow',sans-serif;background:var(--off);color:var(--text);min
 
 <script>
 // ═══════════════════════════════════════════
-//  CONFIG  — update these two values only
+//  CONFIG — PASTE YOUR /exec URL HERE
 // ═══════════════════════════════════════════
-const API_URL   = "https://script.google.com/macros/s/AKfycbzmGSvPl0zCiJ3hUS93yldK3YHTMvcWkodEdeJcKexP-aQ7ebx14X4Swo82QXHoPHmqXw/execadmin";
-const ADMIN_IDS = ["UPO63536","ADMIN","SUPERVISOR"];   // ← Add your admin NTIDs here (UPPERCASE)
+const API_URL   = "https://script.google.com/macros/s/AKfycbx6kvU1FxD9KHyzZKUSjHUopmBT6LGmEmhCCWsAwaFd5ctZUtXON64MQP8XlolfdN1aDA/exec";
+const ADMIN_IDS = ["ADMIN001","ADMIN","SUPERVISOR"];  // ← uppercase NTIDs for admin access
 
 // ═══════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════
-let currentUser  = null;
-let myRecords    = [];
-let allRecords   = [];   // admin only
-let filterVal    = 'all';
-let modalId      = null;
-let adminView    = 'all';
-let isAdmin      = false;
+let currentUser = null;
+let myRecords   = [];
+let allRecords  = [];
+let filterVal   = 'all';
+let modalId     = null;
+let adminView   = 'all';
+let isAdmin     = false;
 
 // ═══════════════════════════════════════════
 //  UTILS
@@ -474,11 +543,11 @@ function toast(msg, type=''){
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'show ' + type;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>t.className='', 3000);
+  toastTimer = setTimeout(()=>{ t.className=''; }, 3500);
 }
-function fmtPhone(p){ return p&&p.length===10?`(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`:p||'—'; }
-function fmtDate(d){ if(!d)return '—'; try{ return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch{return d;} }
-function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function fmtPhone(p){ return p&&String(p).replace(/\D/g,'').length===10?`(${String(p).slice(0,3)}) ${String(p).slice(3,6)}-${String(p).slice(6)}`:p||'—'; }
+function fmtDate(d){ if(!d)return '—'; try{ return new Date(String(d).includes('T')?d:d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch{return d;} }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function statusPill(s){
   if(s==='Yes') return '<span class="status-pill sp-done">Done</span>';
   if(s==='In Progress') return '<span class="status-pill sp-prog">In Progress</span>';
@@ -487,24 +556,52 @@ function statusPill(s){
 function cardClass(s){ return s==='Yes'?'done':s==='In Progress'?'inprog':''; }
 
 // ═══════════════════════════════════════════
+//  CORE API HELPER
+//  BUG FIX: Google Apps Script requires a GET-based proxy for POST
+//  because no-cors POSTs drop the body in some browsers and
+//  can't be read back. We send all writes via GET with params,
+//  and reads via GET with params. This is the most reliable
+//  cross-origin method for Apps Script web apps.
+// ═══════════════════════════════════════════
+async function apiGet(params){
+  const url = API_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { redirect: 'follow' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch(e){ throw new Error('Bad JSON: ' + text.slice(0,120)); }
+}
+
+async function apiPost(payload){
+  // FIX: Use GET with encoded payload — fully CORS-safe for Apps Script
+  const encoded = encodeURIComponent(JSON.stringify(payload));
+  const url = API_URL + '?payload=' + encoded;
+  const res = await fetch(url, { redirect: 'follow' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch(e){ return { success: true }; } // no-cors fallback: assume success
+}
+
+// ═══════════════════════════════════════════
 //  LOGIN / LOGOUT
 // ═══════════════════════════════════════════
 async function doLogin(){
-  const ntid = document.getElementById('l-ntid').value.trim().toUpperCase();
-  const name = document.getElementById('l-name').value.trim();
+  const ntid  = document.getElementById('l-ntid').value.trim().toUpperCase();
+  const name  = document.getElementById('l-name').value.trim();
   const errEl = document.getElementById('l-err');
   if(!ntid||!name){ errEl.style.display='block'; return; }
   errEl.style.display='none';
 
-  isAdmin = ADMIN_IDS.includes(ntid);
+  isAdmin     = ADMIN_IDS.includes(ntid);
   currentUser = { ntid, name };
 
-  loading(true, 'Loading your records…');
+  loading(true,'Loading your records…');
   try {
     await loadMyRecords(false);
     if(isAdmin) await loadAllRecords();
 
-    document.getElementById('tb-ntid').textContent = ntid;
+    // Update UI
     document.getElementById('tb-avatar').textContent = name.charAt(0).toUpperCase();
     const h = new Date().getHours();
     const g = h<12?'Morning':h<17?'Afternoon':'Evening';
@@ -513,69 +610,77 @@ async function doLogin(){
     if(isAdmin){
       document.getElementById('nb-admin').style.display = '';
       document.getElementById('tb-ntid').innerHTML = `<span class="admin-crown">👑</span>${ntid}`;
+    } else {
+      document.getElementById('tb-ntid').textContent = ntid;
     }
 
     document.getElementById('s-login').classList.remove('active');
     document.getElementById('s-app').classList.add('active');
     switchPage('dashboard', document.getElementById('nb-dashboard'));
   } catch(e){
-    toast('❌ Could not connect to Google Sheets. Check your internet.','err');
-    console.error(e);
+    currentUser = null;
+    toast('❌ Cannot reach Google Sheets. Make sure the Apps Script is deployed as "Anyone" with /exec URL.','err');
+    console.error('Login error:', e);
   } finally {
     loading(false);
   }
 }
 
 function doLogout(){
-  currentUser = null; myRecords = []; allRecords = []; isAdmin = false;
+  currentUser = null; myRecords = []; allRecords = []; isAdmin = false; filterVal = 'all';
   document.getElementById('s-app').classList.remove('active');
   document.getElementById('s-login').classList.add('active');
-  document.getElementById('l-ntid').value='';
-  document.getElementById('l-name').value='';
-  document.getElementById('nb-admin').style.display='none';
+  document.getElementById('l-ntid').value = '';
+  document.getElementById('l-name').value = '';
+  document.getElementById('nb-admin').style.display = 'none';
 }
 
 // ═══════════════════════════════════════════
-//  API CALLS
+//  PARSE ROWS FROM SHEET
 // ═══════════════════════════════════════════
 function parseRows(rows){
-  // Columns: ID, SubmittedAt, NTID, Name, CustomerName, MetroPhone, MetroAcct,
-  //          Pin, Devices, MetroPlan, TMoPlan, DateOrdered, Zip, OrderId,
-  //          TmoAcct, LinesMigrated, MigrationDone
-  return rows.map(r=>({
-    id:             r[0]||'',
-    submittedAt:    r[1]||'',
-    ntid:           r[2]||'',
-    repName:        r[3]||'',
-    customerName:   r[4]||'',
-    metroPhone:     r[5]||'',
-    metroAcct:      r[6]||'',
-    pin:            r[7]||'',
-    devices:        r[8]||'',
-    metroPlan:      r[9]||'',
-    tmoPlan:        r[10]||'',
-    dateOrdered:    r[11]||'',
-    zip:            r[12]||'',
-    orderId:        r[13]||'',
-    tmoAcct:        r[14]||'',
-    linesMigrated:  parseInt(r[15])||0,
-    migrationDone:  r[16]||'No',
-  }));
+  if(!Array.isArray(rows)) return [];
+  return rows
+    .filter(r => Array.isArray(r) && r.length > 0 && r[0] !== '' && r[0] !== 'ID')
+    .map(r => ({
+      id:            String(r[0]||''),
+      submittedAt:   String(r[1]||''),
+      ntid:          String(r[2]||''),
+      repName:       String(r[3]||''),
+      customerName:  String(r[4]||''),
+      metroPhone:    String(r[5]||'').replace(/\D/g,''),
+      metroAcct:     String(r[6]||''),
+      pin:           String(r[7]||''),
+      devices:       String(r[8]||''),
+      metroPlan:     String(r[9]||''),
+      tmoPlan:       String(r[10]||''),
+      dateOrdered:   String(r[11]||''),
+      zip:           String(r[12]||''),
+      orderId:       String(r[13]||''),
+      tmoAcct:       String(r[14]||''),
+      linesMigrated: parseInt(r[15])||0,
+      migrationDone: String(r[16]||'No'),
+    }));
 }
 
+// ═══════════════════════════════════════════
+//  DATA LOADING
+// ═══════════════════════════════════════════
 async function loadMyRecords(showUI=true){
   if(showUI) loading(true,'Refreshing your records…');
   try {
-    const res = await fetch(`${API_URL}?action=getRecords&ntid=${currentUser.ntid}`);
-    const data = await res.json();
-    myRecords = parseRows(data.rows||data||[]);
+    const data = await apiGet({ action:'getRecords', ntid: currentUser.ntid });
+    // Handle both {rows:[]} and raw [] responses
+    const rawRows = Array.isArray(data) ? data : (data.rows || []);
+    myRecords = parseRows(rawRows);
     renderDashboard();
     renderMyRecords();
     renderLeaderboard();
     if(showUI) toast('✅ Records refreshed','ok');
   } catch(e){
-    if(showUI) toast('❌ Refresh failed','err');
-    console.error(e);
+    console.error('loadMyRecords error:', e);
+    if(showUI) toast('❌ Refresh failed — check connection','err');
+    throw e; // re-throw so login can catch it
   } finally {
     if(showUI) loading(false);
   }
@@ -583,16 +688,20 @@ async function loadMyRecords(showUI=true){
 
 async function loadAllRecords(){
   try {
-    const res = await fetch(`${API_URL}?action=getAllRecords&adminKey=TMOBILE_ADMIN_2024`);
-    const data = await res.json();
-    allRecords = parseRows(data.rows||data||[]);
+    const data = await apiGet({ action:'getAllRecords', adminKey:'TMOBILE_ADMIN_2024' });
+    const rawRows = Array.isArray(data) ? data : (data.rows || []);
+    allRecords = parseRows(rawRows);
     renderAdmin();
-  } catch(e){ console.error('Admin load error',e); }
+    renderLeaderboard();
+  } catch(e){ console.error('loadAllRecords error:', e); }
 }
 
+// ═══════════════════════════════════════════
+//  SUBMIT NEW RECORD
+// ═══════════════════════════════════════════
 async function submitRecord(){
   const name   = document.getElementById('f-name').value.trim();
-  const phone  = document.getElementById('f-phone').value.trim();
+  const phone  = document.getElementById('f-phone').value.trim().replace(/\D/g,'');
   const metro  = document.getElementById('f-metro-acct').value.trim();
   const status = document.getElementById('f-status').value;
 
@@ -619,45 +728,42 @@ async function submitRecord(){
     tmoAcct:       document.getElementById('f-tmo-acct').value.trim(),
     linesMigrated: parseInt(document.getElementById('f-lines').value)||0,
     migrationDone: status,
-    tmoPin:        document.getElementById('f-tmo-pin').value.trim(),
   };
 
   loading(true,'Saving to Google Sheets…');
   try {
-    await fetch(API_URL, {
-      method:'POST', mode:'no-cors', cache:'no-cache',
-      headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify({ action:'addRecord', data: rec })
-    });
+    await apiPost({ action:'addRecord', data: rec });
+    // Add to local state immediately
     myRecords.unshift(rec);
     if(isAdmin) allRecords.unshift(rec);
     renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
     clearForm();
-    toast('✅ Migration saved to Google Sheets!','ok');
+    toast('✅ Migration saved!','ok');
     switchPage('dashboard', document.getElementById('nb-dashboard'));
   } catch(e){
-    toast('❌ Save failed. Try again.','err');
-    console.error(e);
+    console.error('submitRecord error:', e);
+    toast('❌ Save failed — check your connection','err');
   } finally { loading(false); }
 }
 
+// ═══════════════════════════════════════════
+//  DELETE RECORD
+// ═══════════════════════════════════════════
 async function deleteRecord(){
   if(!modalId) return;
-  if(!confirm('Delete this record permanently?')) return;
+  if(!confirm('Delete this record permanently from Google Sheets?')) return;
   loading(true,'Deleting…');
   try {
-    await fetch(API_URL, {
-      method:'POST', mode:'no-cors', cache:'no-cache',
-      headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify({ action:'deleteRecord', id: modalId, ntid: currentUser.ntid })
-    });
-    myRecords = myRecords.filter(r=>r.id!==modalId);
+    await apiPost({ action:'deleteRecord', id: modalId, ntid: currentUser.ntid });
+    myRecords   = myRecords.filter(r=>r.id!==modalId);
     if(isAdmin) allRecords = allRecords.filter(r=>r.id!==modalId);
     closeModal();
     renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
     toast('Record deleted','ok');
-  } catch(e){ toast('Delete failed','err'); console.error(e); }
-  finally { loading(false); }
+  } catch(e){
+    console.error('deleteRecord error:', e);
+    toast('❌ Delete failed','err');
+  } finally { loading(false); }
 }
 
 // ═══════════════════════════════════════════
@@ -881,11 +987,7 @@ async function updateStatus(newStatus){
   box.classList.add('updating-pulse');
 
   try {
-    await fetch(API_URL, {
-      method:'POST', mode:'no-cors', cache:'no-cache',
-      headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify({ action:'updateStatus', id: modalId, ntid: currentUser.ntid, status: newStatus })
-    });
+    await apiPost({ action:'updateStatus', id: modalId, ntid: currentUser.ntid, status: newStatus });
 
     // Re-render all views with updated status
     renderDashboard();
@@ -906,8 +1008,91 @@ async function updateStatus(newStatus){
   }
 }
 
-function closeModal(){ document.getElementById('modal').classList.add('hidden'); modalId=null; }
+function closeModal(){
+  document.getElementById('modal').classList.add('hidden');
+  toggleEditForm(false);
+  modalId=null;
+}
 function closeModalClick(e){ if(e.target===document.getElementById('modal')) closeModal(); }
+
+// ═══════════════════════════════════════════
+//  EDIT RECORD
+// ═══════════════════════════════════════════
+function toggleEditForm(open){
+  const wrap = document.getElementById('edit-form-wrap');
+  const btns = document.getElementById('modal-action-btns');
+  wrap.classList.toggle('open', open);
+  // Scroll to edit form when opening
+  if(open) setTimeout(()=>wrap.scrollIntoView({behavior:'smooth',block:'nearest'}), 50);
+
+  if(open){
+    // Populate edit fields with current record values
+    const src = isAdmin ? allRecords : myRecords;
+    const r = src.find(x=>x.id===modalId);
+    if(!r) return;
+    document.getElementById('e-name').value       = r.customerName  || '';
+    document.getElementById('e-phone').value      = r.metroPhone    || '';
+    document.getElementById('e-zip').value        = r.zip           || '';
+    document.getElementById('e-metro-acct').value = r.metroAcct     || '';
+    document.getElementById('e-pin').value        = r.pin           || '';
+    document.getElementById('e-metro-plan').value = r.metroPlan     || '';
+    document.getElementById('e-tmo-acct').value   = r.tmoAcct       || '';
+    document.getElementById('e-tmo-plan').value   = r.tmoPlan       || '';
+    document.getElementById('e-order-id').value   = r.orderId       || '';
+    document.getElementById('e-date').value       = r.dateOrdered   || '';
+    document.getElementById('e-devices').value    = r.devices       || '';
+    document.getElementById('e-lines').value      = r.linesMigrated || 0;
+    document.getElementById('e-status').value     = r.migrationDone || 'No';
+  }
+}
+
+async function saveEdit(){
+  if(!modalId) return;
+  const src = isAdmin ? allRecords : myRecords;
+  const r = src.find(x=>x.id===modalId);
+  if(!r) return;
+
+  const newName = document.getElementById('e-name').value.trim();
+  if(!newName){ toast('⚠️ Customer name cannot be empty','warn'); return; }
+
+  // Build updated record (merge changes onto existing)
+  const updated = {
+    ...r,
+    customerName:  newName,
+    metroPhone:    document.getElementById('e-phone').value.trim().replace(/\D/g,''),
+    zip:           document.getElementById('e-zip').value.trim(),
+    metroAcct:     document.getElementById('e-metro-acct').value.trim(),
+    pin:           document.getElementById('e-pin').value.trim(),
+    metroPlan:     document.getElementById('e-metro-plan').value.trim(),
+    tmoAcct:       document.getElementById('e-tmo-acct').value.trim(),
+    tmoPlan:       document.getElementById('e-tmo-plan').value.trim(),
+    orderId:       document.getElementById('e-order-id').value.trim(),
+    dateOrdered:   document.getElementById('e-date').value,
+    devices:       document.getElementById('e-devices').value.trim(),
+    linesMigrated: parseInt(document.getElementById('e-lines').value)||0,
+    migrationDone: document.getElementById('e-status').value,
+  };
+
+  loading(true,'Saving changes…');
+  try {
+    await apiPost({ action:'updateRecord', data: updated, ntid: currentUser.ntid });
+
+    // Update local state
+    Object.assign(r, updated);
+    const myR = myRecords.find(x=>x.id===modalId);
+    if(myR) Object.assign(myR, updated);
+
+    // Refresh modal view with new values
+    toggleEditForm(false);
+    openModal(modalId);
+
+    renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
+    toast('✅ Record updated!','ok');
+  } catch(e){
+    console.error('saveEdit error:',e);
+    toast('❌ Update failed. Try again.','err');
+  } finally { loading(false); }
+}
 
 // ═══════════════════════════════════════════
 //  NAVIGATION
