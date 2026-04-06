@@ -1,1120 +1,569 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="theme-color" content="#E2007A"/>
-<title>Metro → T-Mobile Migration Tracker</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<style>
-:root {
-  --mag:#E2007A; --mag2:#B8005F; --mag-glow:rgba(226,0,122,.2);
-  --navy:#002E5F; --navy2:#001A3A;
-  --green:#00C07A; --orange:#FF6B35; --yellow:#FFB900;
-  --white:#fff; --off:#F7F3F6; --gray:#9B8FA0; --border:rgba(226,0,122,.12);
-  --text:#1A0A14; --text2:#5C4A5A;
-  --radius:18px; --card-shadow:0 4px 20px rgba(0,0,0,.06);
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Barlow',sans-serif;background:var(--off);color:var(--text);min-height:100vh;overflow-x:hidden;}
+import { useState, useEffect, useCallback } from "react";
 
-/* ── LOADING ── */
-#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
-#loading-overlay.show{display:flex;}
-.spin{width:44px;height:44px;border:4px solid var(--mag-glow);border-top-color:var(--mag);border-radius:50%;animation:spin .7s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--mag);font-size:1rem;letter-spacing:.06em;text-transform:uppercase;}
+// ─── Config ──────────────────────────────────────────────────────────────────
+const ADMIN_NTIDS = ["UPO63536", "ADMIN02", "MGRADMIN"]; // Add real admin NTIDs here
+const TMOBILE_PLANS = [
+  "$25 Essentials", "$35 Go5G", "$45 Go5G Plus", "$55 Go5G Next",
+  "$40 Unlimited", "$50 Magenta", "$60 Magenta MAX", "Other"
+];
+const METRO_PLANS = [
+  "$25 Unlimited", "$30 Unlimited", "$40 Unlimited", "$50 Unlimited",
+  "$60 Unlimited", "Other"
+];
+const MIGRATION_STATUS = ["Yes", "No", "In Progress"];
 
-/* ── TOAST ── */
-#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--navy);color:#fff;padding:12px 22px;border-radius:50px;font-size:.85rem;font-weight:600;z-index:5000;opacity:0;pointer-events:none;transition:.3s;white-space:nowrap;max-width:90vw;text-align:center;}
-#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-#toast.ok{background:var(--green);}
-#toast.err{background:#E53935;}
-#toast.warn{background:var(--orange);}
+// ─── Utilities ───────────────────────────────────────────────────────────────
+const uid = () => `rec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+const today = () => new Date().toISOString().split("T")[0];
+const fmt = (iso) => iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
-/* ── SCREENS ── */
-.screen{position:fixed;inset:0;display:none;overflow-y:auto;background:var(--off);}
-.screen.active{display:block;}
+const STATUS_COLOR = {
+  "Yes": "bg-emerald-100 text-emerald-700 border-emerald-200",
+  "No": "bg-red-100 text-red-700 border-red-200",
+  "In Progress": "bg-amber-100 text-amber-700 border-amber-200",
+};
 
-/* ══ LOGIN ══ */
-#s-login{display:none;align-items:center;justify-content:center;background:linear-gradient(160deg,var(--navy2),var(--navy) 60%,#1a0030);}
-#s-login.active{display:flex;}
-.login-wrap{width:90%;max-width:400px;padding:44px 32px;background:rgba(255,255,255,.07);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.1);border-radius:28px;text-align:center;}
-.login-logo{width:68px;height:68px;background:var(--mag);border-radius:20px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:900;color:#fff;margin:0 auto 20px;box-shadow:0 10px 30px var(--mag-glow);}
-.login-title{font-family:'Barlow Condensed',sans-serif;font-size:1.9rem;font-weight:900;color:#fff;text-transform:uppercase;margin-bottom:6px;}
-.login-sub{color:rgba(255,255,255,.45);font-size:.9rem;margin-bottom:30px;}
-.l-label{display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55);text-align:left;margin-bottom:6px;margin-left:4px;}
-.l-input{width:100%;padding:15px 18px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.15);border-radius:14px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;outline:none;transition:.2s;margin-bottom:16px;}
-.l-input::placeholder{color:rgba(255,255,255,.3);font-weight:400;text-transform:none;}
-.l-input:focus{border-color:var(--mag);}
-.l-input.normal-case{text-transform:none;font-size:1rem;font-weight:500;letter-spacing:0;}
-.btn-login{width:100%;padding:16px;background:var(--mag);border:none;border-radius:14px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:.2s;box-shadow:0 6px 20px var(--mag-glow);}
-.btn-login:active{transform:scale(.97);}
-.login-err{color:var(--mag);font-size:.82rem;font-weight:600;margin-top:12px;display:none;}
-.admin-hint{margin-top:18px;font-size:.75rem;color:rgba(255,255,255,.2);}
+const EMPTY_FORM = {
+  metroPhone: "", metroAccount: "", metroPIN: "", customerName: "",
+  devicesOrdered: "", metroPlan: "", tmobilePlan: "", dateOrdered: today(),
+  zipCode: "", orderID: "", tmobileAccount: "", linesMigrated: "",
+  migrationCompleted: "In Progress",
+};
 
-/* ══ APP LAYOUT ══ */
-#s-app{display:none;}
-#s-app.active{display:block;}
-.topbar{background:var(--navy);padding:0 18px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 16px rgba(0,0,0,.25);}
-.tb-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.25rem;color:#fff;}
-.tb-brand span{color:var(--mag);}
-.tb-right{display:flex;align-items:center;gap:10px;}
-.tb-avatar{width:34px;height:34px;background:var(--mag);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#fff;font-size:.95rem;}
-.tb-ntid{font-size:.78rem;font-weight:700;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.06em;}
-.tb-logout{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;border-radius:8px;cursor:pointer;}
-.tb-logout:active{background:rgba(255,255,255,.15);}
-.admin-crown{font-size:.8rem;color:var(--yellow);margin-right:4px;}
-
-/* ── BOTTOM NAV ── */
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eee;display:flex;padding:8px 0 20px;z-index:200;box-shadow:0 -4px 20px rgba(0,0,0,.07);}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--gray);background:none;border:none;cursor:pointer;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:4px 0;}
-.nav-btn.active{color:var(--mag);}
-.nav-icon{font-size:1.3rem;}
-
-/* ── CONTENT ── */
-.page{display:none;padding:18px 16px 90px;max-width:640px;margin:0 auto;animation:fadeUp .3s ease;}
-.page.active{display:block;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
-
-/* ── SECTIONS ── */
-.sec-title{font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:16px;}
-.sec-sub{color:var(--gray);font-size:.85rem;margin-top:-12px;margin-bottom:16px;}
-
-/* ── STAT CARDS ── */
-.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
-.stat-card{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);border:1px solid var(--border);}
-.stat-card.accent{background:var(--mag);}
-.stat-card.accent .s-val,.stat-card.accent .s-lbl{color:#fff;}
-.stat-card.accent .s-lbl{color:rgba(255,255,255,.7);}
-.stat-card.dark{background:var(--navy);}
-.stat-card.dark .s-val,.stat-card.dark .s-lbl{color:#fff;}
-.stat-card.dark .s-lbl{color:rgba(255,255,255,.6);}
-.s-val{font-family:'Barlow Condensed',sans-serif;font-size:2.2rem;font-weight:900;color:var(--mag);display:block;line-height:1;}
-.s-lbl{font-size:.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.06em;margin-top:4px;display:block;}
-
-/* ── RECORD CARDS ── */
-.rec-card{background:#fff;border-radius:var(--radius);padding:16px;margin-bottom:12px;border-left:5px solid var(--orange);box-shadow:var(--card-shadow);cursor:pointer;transition:.15s;}
-.rec-card:active{transform:scale(.98);}
-.rec-card.done{border-left-color:var(--green);}
-.rec-card.inprog{border-left-color:var(--yellow);}
-.rc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
-.rc-name{font-weight:700;font-size:1rem;color:var(--navy);}
-.rc-ntid{font-size:.7rem;color:var(--gray);margin-top:2px;}
-.status-pill{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px;border-radius:50px;flex-shrink:0;}
-.sp-done{background:#D4F5E9;color:#007A4A;}
-.sp-prog{background:#FFF3CC;color:#7A5A00;}
-.sp-no{background:#FFE5D0;color:#C04800;}
-.rc-info{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem;color:var(--text2);}
-.rc-foot{margin-top:10px;padding-top:10px;border-top:1px dashed #eee;font-size:.72rem;color:var(--gray);display:flex;justify-content:space-between;}
-
-/* ── FORM ── */
-.form-card{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);margin-bottom:14px;}
-.form-section{font-family:'Barlow Condensed',sans-serif;font-size:.88rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mag);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--off);}
-.fg{margin-bottom:14px;}
-.fl{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray);margin-bottom:6px;}
-.fl .req{color:var(--mag);}
-.fi,.fs{width:100%;padding:13px 15px;border:2px solid #eee;border-radius:12px;font-family:'Barlow',sans-serif;font-size:.95rem;color:var(--text);background:var(--off);outline:none;transition:.2s;appearance:none;}
-.fi:focus,.fs:focus{border-color:var(--mag);background:#fff;box-shadow:0 0 0 4px var(--mag-glow);}
-.fs{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239B8FA0' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:40px;}
-.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.status-toggle{display:flex;gap:8px;margin-top:6px;}
-.st-opt{flex:1;text-align:center;padding:12px 6px;border-radius:12px;border:2px solid #eee;cursor:pointer;font-size:.82rem;font-weight:700;transition:.2s;color:var(--gray);}
-.st-opt.sel{border-color:var(--mag);background:var(--mag-glow);color:var(--mag);}
-.st-opt.sel-green{border-color:var(--green);background:#D4F5E9;color:#007A4A;}
-.st-opt.sel-yellow{border-color:var(--yellow);background:#FFF3CC;color:#7A5A00;}
-.btn-submit{width:100%;padding:16px;background:var(--mag);border:none;border-radius:14px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;box-shadow:0 6px 20px var(--mag-glow);transition:.2s;}
-.btn-submit:active{transform:scale(.97);}
-
-/* ── FILTER CHIPS ── */
-.chip-bar{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;}
-.chip{flex-shrink:0;padding:7px 16px;border-radius:50px;border:2px solid #eee;background:#fff;font-size:.72rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);transition:.2s;}
-.chip.on{background:var(--mag);border-color:var(--mag);color:#fff;}
-
-/* ── MODAL ── */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,30,.5);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:flex-end;justify-content:center;}
-.modal-bg.hidden{display:none;}
-.modal-sheet{background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:540px;max-height:88vh;overflow-y:auto;padding:24px 20px 40px;animation:slideUp .28s ease;}
-@keyframes slideUp{from{transform:translateY(100%);}to{transform:none;}}
-.modal-handle{width:38px;height:4px;background:#eee;border-radius:2px;margin:0 auto 18px;}
-.modal-title{font-family:'Barlow Condensed',sans-serif;font-size:1.35rem;font-weight:800;color:var(--navy);margin-bottom:16px;}
-.d-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f2f2f2;font-size:.88rem;}
-.d-row:last-of-type{border:none;}
-.d-key{color:var(--gray);font-weight:500;}
-.d-val{color:var(--text);font-weight:700;text-align:right;max-width:58%;word-break:break-word;}
-.modal-btns{display:flex;gap:10px;margin-top:18px;}
-.btn-ghost{flex:1;padding:12px;border:2px solid var(--mag);border-radius:12px;color:var(--mag);background:none;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;}
-.btn-red{flex:1;padding:12px;border:none;border-radius:12px;background:#E53935;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;}
-
-/* ── ADMIN PANEL ── */
-.admin-bar{background:linear-gradient(90deg,var(--navy2),var(--navy));padding:12px 16px;border-radius:14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;}
-.admin-badge{background:var(--yellow);color:#000;font-size:.7rem;font-weight:800;text-transform:uppercase;padding:4px 10px;border-radius:50px;letter-spacing:.06em;}
-.admin-bar-text{color:rgba(255,255,255,.7);font-size:.82rem;}
-.admin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
-.admin-stat{background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:var(--card-shadow);}
-.as-val{font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:900;color:var(--mag);}
-.as-lbl{font-size:.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;}
-.rep-row{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;box-shadow:var(--card-shadow);}
-.rep-ava{width:38px;height:38px;border-radius:10px;background:var(--mag);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#fff;font-size:1rem;flex-shrink:0;}
-.rep-info{flex:1;}
-.rep-name{font-weight:700;font-size:.95rem;color:var(--navy);}
-.rep-stat{font-size:.78rem;color:var(--gray);}
-.rep-bar-wrap{width:60px;height:5px;background:#eee;border-radius:3px;margin-top:4px;}
-.rep-bar{height:5px;background:var(--mag);border-radius:3px;}
-.rep-count{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:var(--mag);flex-shrink:0;}
-.admin-search{width:100%;padding:12px 16px;border:2px solid #eee;border-radius:12px;font-family:'Barlow',sans-serif;font-size:.95rem;background:#fff;outline:none;margin-bottom:14px;transition:.2s;}
-.admin-search:focus{border-color:var(--mag);}
-.admin-tab-bar{display:flex;gap:8px;margin-bottom:16px;}
-.atab{padding:9px 18px;border-radius:50px;border:2px solid #eee;background:#fff;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);cursor:pointer;transition:.2s;}
-.atab.on{background:var(--navy);border-color:var(--navy);color:#fff;}
-.refresh-btn{background:var(--off);border:2px solid var(--border);border-radius:10px;padding:8px 14px;font-size:.75rem;font-weight:700;color:var(--gray);cursor:pointer;margin-bottom:14px;display:flex;align-items:center;gap:6px;}
-.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-
-/* ── LEADERBOARD ── */
-.lb-row{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;box-shadow:var(--card-shadow);}
-.lb-rank{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.35rem;width:32px;text-align:center;}
-.rank-1{color:#FFB900;} .rank-2{color:#A8A8B8;} .rank-3{color:#CD7F32;}
-.you-tag{background:var(--mag);color:#fff;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:50px;margin-left:6px;vertical-align:middle;}
-.lb-bar-wrap{width:64px;height:5px;background:#eee;border-radius:3px;margin-top:5px;}
-.lb-bar{height:5px;background:var(--mag);border-radius:3px;transition:width .5s ease;}
-
-/* ── EMPTY ── */
-.empty{text-align:center;padding:50px 20px;color:var(--gray);}
-.empty-icon{font-size:3rem;margin-bottom:12px;opacity:.4;}
-.empty p{font-size:.9rem;}
-
-/* ── STATUS UPDATE SECTION IN MODAL ── */
-.status-update-box{background:var(--off);border-radius:14px;padding:14px;margin:16px 0 4px;}
-.status-update-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray);margin-bottom:10px;display:block;}
-.status-btns{display:flex;gap:8px;}
-.s-btn{flex:1;padding:12px 6px;border-radius:12px;border:2px solid transparent;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:.88rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;transition:.2s;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.2;}
-.s-btn .s-icon{font-size:1.3rem;}
-.s-btn-done{background:#D4F5E9;color:#007A4A;border-color:#A8E6CC;}
-.s-btn-done:active,.s-btn-done.current{background:#00C07A;color:#fff;border-color:#00C07A;box-shadow:0 4px 14px rgba(0,192,122,.35);}
-.s-btn-prog{background:#FFF3CC;color:#7A5A00;border-color:#FFE08A;}
-.s-btn-prog:active,.s-btn-prog.current{background:#FFB900;color:#fff;border-color:#FFB900;box-shadow:0 4px 14px rgba(255,185,0,.35);}
-.s-btn-no{background:#FFE5D0;color:#C04800;border-color:#FFBE99;}
-.s-btn-no:active,.s-btn-no.current{background:#FF6B35;color:#fff;border-color:#FF6B35;box-shadow:0 4px 14px rgba(255,107,53,.35);}
-.updating-pulse{animation:updatingPulse .6s ease infinite alternate;}
-@keyframes updatingPulse{from{opacity:1;}to{opacity:.5;}}
-
-/* ── EDIT FORM INSIDE MODAL ── */
-.edit-form-wrap{display:none;margin-top:4px;}
-.edit-form-wrap.open{display:block;animation:fadeUp .25s ease;}
-.edit-divider{border:none;border-top:2px dashed #eee;margin:16px 0;}
-.edit-section{font-family:"Barlow Condensed",sans-serif;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#E2007A;margin-bottom:10px;margin-top:14px;}
-.edit-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.ef{margin-bottom:12px;}
-.ef label{display:block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9B8FA0;margin-bottom:5px;}
-.ef input,.ef select{width:100%;padding:11px 13px;border:2px solid #eee;border-radius:10px;font-family:"Barlow",sans-serif;font-size:.9rem;color:#1A0A14;background:#F7F3F6;outline:none;transition:.2s;appearance:none;}
-.ef input:focus,.ef select:focus{border-color:#E2007A;background:#fff;box-shadow:0 0 0 3px rgba(226,0,122,.1);}
-.ef select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239B8FA0' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;}
-.btn-edit{flex:1;padding:12px;border:2px solid #002E5F;border-radius:12px;color:#002E5F;background:none;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;transition:.2s;}
-.btn-edit.cancel{border-color:#9B8FA0;color:#9B8FA0;}
-.btn-save{flex:1;padding:12px;border:none;border-radius:12px;background:#E2007A;color:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 14px rgba(226,0,122,.25);transition:.2s;}
-.btn-save:active{transform:scale(.97);}
-</style>
-</head>
-<body>
-
-<!-- LOADING -->
-<div id="loading-overlay"><div class="spin"></div><div class="loading-text" id="loading-msg">Connecting…</div></div>
-
-<!-- TOAST -->
-<div id="toast"></div>
-
-<!-- MODAL -->
-<div class="modal-bg hidden" id="modal" onclick="closeModalClick(event)">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title" id="modal-title">Record</div>
-    <div id="modal-body"></div>
-    <!-- STATUS UPDATE SECTION -->
-    <div class="status-update-box" id="modal-status-box">
-      <span class="status-update-label">⚡ Update Migration Status</span>
-      <div class="status-btns">
-        <button class="s-btn s-btn-done" id="sbtn-yes" onclick="updateStatus('Yes')">
-          <span class="s-icon">✅</span>Completed
-        </button>
-        <button class="s-btn s-btn-prog" id="sbtn-prog" onclick="updateStatus('In Progress')">
-          <span class="s-icon">🔄</span>In Progress
-        </button>
-        <button class="s-btn s-btn-no" id="sbtn-no" onclick="updateStatus('No')">
-          <span class="s-icon">❌</span>Not Yet
-        </button>
-      </div>
-    </div>
-
-    <!-- EDIT FORM (hidden until Edit is tapped) -->
-    <div class="edit-form-wrap" id="edit-form-wrap">
-      <hr class="edit-divider"/>
-      <div class="edit-section">✏️ Edit Record</div>
-
-      <div class="edit-section" style="margin-top:0;margin-bottom:8px;font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;">Customer Info</div>
-      <div class="ef">
-        <label>Customer Name</label>
-        <input id="e-name" type="text" placeholder="Last, First"/>
-      </div>
-      <div class="edit-row">
-        <div class="ef"><label>Metro Phone #</label><input id="e-phone" type="tel" maxlength="10" placeholder="6175550100"/></div>
-        <div class="ef"><label>Zip Code</label><input id="e-zip" type="text" maxlength="5" placeholder="02148"/></div>
-      </div>
-
-      <div class="edit-section" style="font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;margin-top:0;">Metro Account</div>
-      <div class="edit-row">
-        <div class="ef"><label>Metro Account #</label><input id="e-metro-acct" type="text"/></div>
-        <div class="ef"><label>Metro PIN</label><input id="e-pin" type="password" maxlength="8"/></div>
-      </div>
-      <div class="ef"><label>Metro Monthly Plan</label><input id="e-metro-plan" type="text" placeholder="$40 Unlimited"/></div>
-
-      <div class="edit-section" style="font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;margin-top:0;">T-Mobile Order</div>
-      <div class="edit-row">
-        <div class="ef"><label>T-Mobile Account #</label><input id="e-tmo-acct" type="text"/></div>
-        <div class="ef"><label>T-Mobile Plan</label><input id="e-tmo-plan" type="text"/></div>
-      </div>
-      <div class="edit-row">
-        <div class="ef"><label>Order ID</label><input id="e-order-id" type="text"/></div>
-        <div class="ef"><label>Date Ordered</label><input id="e-date" type="date"/></div>
-      </div>
-
-      <div class="edit-section" style="font-size:.72rem;color:#9B8FA0;font-weight:500;text-transform:none;letter-spacing:0;margin-top:0;">Devices & Lines</div>
-      <div class="ef"><label>Devices Ordered</label><input id="e-devices" type="text" placeholder="iPhone 15 x2"/></div>
-      <div class="edit-row">
-        <div class="ef"><label>Lines Migrated</label><input id="e-lines" type="number" min="0" max="20"/></div>
-        <div class="ef"><label>Migration Status</label>
-          <select id="e-status">
-            <option value="No">❌ Not Yet</option>
-            <option value="In Progress">🔄 In Progress</option>
-            <option value="Yes">✅ Completed</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:10px;margin-top:4px;">
-        <button class="btn-edit cancel" onclick="toggleEditForm(false)">Cancel</button>
-        <button class="btn-save" onclick="saveEdit()">💾 Save Changes</button>
-      </div>
-    </div>
-
-    <div class="modal-btns" id="modal-action-btns">
-      <button class="btn-ghost" onclick="closeModal()">Close</button>
-      <button class="btn-edit" id="modal-edit-btn" onclick="toggleEditForm(true)">✏️ Edit</button>
-      <button class="btn-red" id="modal-del" onclick="deleteRecord()">Delete</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════ LOGIN ══════════════════ -->
-<div id="s-login" class="screen active">
-  <div class="login-wrap" style="margin:auto;">
-    <div class="login-logo">T↗</div>
-    <div class="login-title">Migration Tracker</div>
-    <div class="login-sub">Metro by T-Mobile → T-Mobile</div>
-
-    <label class="l-label">Your NTID</label>
-    <input id="l-ntid" class="l-input" type="text" placeholder="e.g. UPO12345" autocomplete="off" autocapitalize="characters" onkeydown="if(event.key==='Enter')doLogin()"/>
-
-    <label class="l-label">Your Full Name</label>
-    <input id="l-name" class="l-input normal-case" type="text" placeholder="First Last" onkeydown="if(event.key==='Enter')doLogin()"/>
-
-    <button class="btn-login" onclick="doLogin()">Enter Dashboard</button>
-    <div class="login-err" id="l-err">Please fill in all fields.</div>
-    <div class="admin-hint">Admin? Use your admin NTID above.</div>
-  </div>
-</div>
-
-<!-- ══════════════════ APP ══════════════════ -->
-<div id="s-app" class="screen">
-  <div class="topbar">
-    <div class="tb-brand">Metro<span>→T</span></div>
-    <div class="tb-right">
-      <div class="tb-ntid" id="tb-ntid"></div>
-      <div class="tb-avatar" id="tb-avatar">?</div>
-      <button class="tb-logout" onclick="doLogout()">Out</button>
-    </div>
-  </div>
-
-  <!-- PAGES -->
-  <div id="p-dashboard" class="page active">
-    <h2 id="greet" style="font-family:'Barlow Condensed';font-size:2rem;font-weight:900;margin-bottom:4px;"></h2>
-    <p style="color:var(--gray);margin-bottom:20px;font-size:.9rem;">Your migration activity</p>
-    <div class="stats-grid">
-      <div class="stat-card accent"><span class="s-val" id="d-total">0</span><span class="s-lbl">My Migrations</span></div>
-      <div class="stat-card dark"><span class="s-val" id="d-done">0</span><span class="s-lbl">Completed</span></div>
-      <div class="stat-card"><span class="s-val" id="d-prog" style="color:var(--yellow)">0</span><span class="s-lbl">In Progress</span></div>
-      <div class="stat-card"><span class="s-val" id="d-lines" style="color:var(--mag)">0</span><span class="s-lbl">Lines Moved</span></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div class="sec-title" style="margin:0;">Recent</div>
-      <button class="refresh-btn" onclick="loadMyRecords(true)"><span class="sync-dot"></span> Refresh</button>
-    </div>
-    <div id="dash-list"></div>
-  </div>
-
-  <div id="p-add" class="page">
-    <div class="sec-title">New Migration</div>
-    <div class="sec-sub">All fields marked * are required</div>
-
-    <div class="form-card">
-      <div class="form-section">📋 Customer Info</div>
-      <div class="fg">
-        <label class="fl">Customer Name <span class="req">*</span></label>
-        <input id="f-name" class="fi" type="text" placeholder="Last, First"/>
-      </div>
-      <div class="fg-row">
-        <div class="fg">
-          <label class="fl">Metro Phone # <span class="req">*</span></label>
-          <input id="f-phone" class="fi" type="tel" placeholder="6175550100" maxlength="10"/>
-        </div>
-        <div class="fg">
-          <label class="fl">Zip Code</label>
-          <input id="f-zip" class="fi" type="text" placeholder="02148" maxlength="5"/>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-card">
-      <div class="form-section">📱 Metro Account</div>
-      <div class="fg-row">
-        <div class="fg">
-          <label class="fl">Metro Account # <span class="req">*</span></label>
-          <input id="f-metro-acct" class="fi" type="text" placeholder="Account #"/>
-        </div>
-        <div class="fg">
-          <label class="fl">Metro / Transfer PIN</label>
-          <input id="f-pin" class="fi" type="password" placeholder="PIN" maxlength="8"/>
-        </div>
-      </div>
-      <div class="fg">
-        <label class="fl">Metro Monthly Plan</label>
-        <input id="f-metro-plan" class="fi" type="text" placeholder="e.g. $40 Unlimited"/>
-      </div>
-    </div>
-
-    <div class="form-card">
-      <div class="form-section">📶 T-Mobile Order</div>
-      <div class="fg-row">
-        <div class="fg">
-          <label class="fl">T-Mobile Account #</label>
-          <input id="f-tmo-acct" class="fi" type="text" placeholder="TMO Account"/>
-        </div>
-        <div class="fg">
-          <label class="fl">T-Mobile PIN</label>
-          <input id="f-tmo-pin" class="fi" type="password" placeholder="PIN" maxlength="8"/>
-        </div>
-      </div>
-      <div class="fg">
-        <label class="fl">T-Mobile Monthly Plan</label>
-        <input id="f-tmo-plan" class="fi" type="text" placeholder="e.g. Go5G Plus $60"/>
-      </div>
-      <div class="fg-row">
-        <div class="fg">
-          <label class="fl">Order ID</label>
-          <input id="f-order-id" class="fi" type="text" placeholder="Order #"/>
-        </div>
-        <div class="fg">
-          <label class="fl">Date Ordered</label>
-          <input id="f-date" class="fi" type="date"/>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-card">
-      <div class="form-section">📦 Devices & Status</div>
-      <div class="fg">
-        <label class="fl">Devices Ordered</label>
-        <input id="f-devices" class="fi" type="text" placeholder="iPhone 15 x2, Galaxy S24 x1"/>
-      </div>
-      <div class="fg-row">
-        <div class="fg">
-          <label class="fl">Lines Migrated</label>
-          <input id="f-lines" class="fi" type="number" placeholder="0" min="0" max="20"/>
-        </div>
-        <div class="fg">
-          <label class="fl">Migration Status <span class="req">*</span></label>
-          <select id="f-status" class="fs">
-            <option value="">Select…</option>
-            <option value="Yes">✅ Completed</option>
-            <option value="In Progress">🔄 In Progress</option>
-            <option value="No">❌ Not Yet</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <button class="btn-submit" onclick="submitRecord()">💾 Save Migration to Cloud</button>
-  </div>
-
-  <div id="p-records" class="page">
-    <div class="sec-title">My Records</div>
-    <div class="chip-bar">
-      <div class="chip on" data-f="all" onclick="setFilter(this)">All</div>
-      <div class="chip" data-f="Yes" onclick="setFilter(this)">✅ Done</div>
-      <div class="chip" data-f="In Progress" onclick="setFilter(this)">🔄 Progress</div>
-      <div class="chip" data-f="No" onclick="setFilter(this)">❌ Pending</div>
-    </div>
-    <div id="rec-list"></div>
-  </div>
-
-  <div id="p-leaderboard" class="page">
-    <div class="sec-title">Team Board 🏆</div>
-    <div class="sec-sub">Ranked by completed migrations</div>
-    <div id="lb-list"></div>
-  </div>
-
-  <!-- ADMIN PAGE -->
-  <div id="p-admin" class="page">
-    <div class="admin-bar">
-      <span class="admin-badge">⚡ Admin</span>
-      <span class="admin-bar-text">Full visibility into all rep records</span>
-    </div>
-
-    <div class="admin-stats">
-      <div class="admin-stat"><div class="as-val" id="a-total">—</div><div class="as-lbl">Total</div></div>
-      <div class="admin-stat"><div class="as-val" id="a-done" style="color:var(--green)">—</div><div class="as-lbl">Complete</div></div>
-      <div class="admin-stat"><div class="as-val" id="a-reps">—</div><div class="as-lbl">Reps</div></div>
-    </div>
-
-    <div class="admin-tab-bar">
-      <div class="atab on" id="at-all" onclick="adminTab('all')">All Records</div>
-      <div class="atab" id="at-reps" onclick="adminTab('reps')">By Rep</div>
-    </div>
-
-    <div id="admin-all-view">
-      <input class="admin-search" id="admin-search" type="text" placeholder="🔍  Search by name, phone, NTID…" oninput="renderAdminAll()"/>
-      <div id="admin-rec-list"></div>
-    </div>
-
-    <div id="admin-reps-view" style="display:none;">
-      <div id="admin-rep-list"></div>
-    </div>
-  </div>
-
-  <!-- BOTTOM NAV -->
-  <nav class="bottom-nav" id="bottom-nav">
-    <button class="nav-btn active" id="nb-dashboard" onclick="switchPage('dashboard',this)">
-      <span class="nav-icon">⊞</span>Dashboard
-    </button>
-    <button class="nav-btn" id="nb-add" onclick="switchPage('add',this)">
-      <span class="nav-icon">＋</span>Add
-    </button>
-    <button class="nav-btn" id="nb-records" onclick="switchPage('records',this)">
-      <span class="nav-icon">📋</span>Records
-    </button>
-    <button class="nav-btn" id="nb-leaderboard" onclick="switchPage('leaderboard',this)">
-      <span class="nav-icon">📈</span>Team
-    </button>
-    <button class="nav-btn" id="nb-admin" style="display:none;" onclick="switchPage('admin',this)">
-      <span class="nav-icon">👑</span>Admin
-    </button>
-  </nav>
-</div>
-
-<script>
-// ═══════════════════════════════════════════
-//  CONFIG — PASTE YOUR /exec URL HERE
-// ═══════════════════════════════════════════
-const API_URL   = "https://script.google.com/macros/s/AKfycbyCnw2Fo_4i3tmFEfAoZc2WtxRDf4lQ1LheEDRk9AhDH-8kH6RN5A404sPC45JMYxucpQ/exec";
-const ADMIN_IDS = ["ADMIN001","UPO63536","SUPERVISOR"];  // ← uppercase NTIDs for admin access
-
-// ═══════════════════════════════════════════
-//  STATE
-// ═══════════════════════════════════════════
-let currentUser = null;
-let myRecords   = [];
-let allRecords  = [];
-let filterVal   = 'all';
-let modalId     = null;
-let adminView   = 'all';
-let isAdmin     = false;
-
-// ═══════════════════════════════════════════
-//  UTILS
-// ═══════════════════════════════════════════
-function loading(show, msg='Connecting to Google Sheets…'){
-  const el = document.getElementById('loading-overlay');
-  document.getElementById('loading-msg').textContent = msg;
-  el.classList.toggle('show', show);
-}
-let toastTimer;
-function toast(msg, type=''){
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>{ t.className=''; }, 3500);
-}
-function fmtPhone(p){ return p&&String(p).replace(/\D/g,'').length===10?`(${String(p).slice(0,3)}) ${String(p).slice(3,6)}-${String(p).slice(6)}`:p||'—'; }
-function fmtDate(d){ if(!d)return '—'; try{ return new Date(String(d).includes('T')?d:d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch{return d;} }
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function statusPill(s){
-  if(s==='Yes') return '<span class="status-pill sp-done">Done</span>';
-  if(s==='In Progress') return '<span class="status-pill sp-prog">In Progress</span>';
-  return '<span class="status-pill sp-no">Pending</span>';
-}
-function cardClass(s){ return s==='Yes'?'done':s==='In Progress'?'inprog':''; }
-
-// ═══════════════════════════════════════════
-//  CORE API HELPER
-//  BUG FIX: Google Apps Script requires a GET-based proxy for POST
-//  because no-cors POSTs drop the body in some browsers and
-//  can't be read back. We send all writes via GET with params,
-//  and reads via GET with params. This is the most reliable
-//  cross-origin method for Apps Script web apps.
-// ═══════════════════════════════════════════
-async function apiGet(params){
-  const url = API_URL + '?' + new URLSearchParams(params).toString();
-  const res = await fetch(url, { redirect: 'follow' });
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const text = await res.text();
-  try { return JSON.parse(text); }
-  catch(e){ throw new Error('Bad JSON: ' + text.slice(0,120)); }
-}
-
-async function apiPost(payload){
-  // FIX: Use GET with encoded payload — fully CORS-safe for Apps Script
-  const encoded = encodeURIComponent(JSON.stringify(payload));
-  const url = API_URL + '?payload=' + encoded;
-  const res = await fetch(url, { redirect: 'follow' });
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const text = await res.text();
-  try { return JSON.parse(text); }
-  catch(e){ return { success: true }; } // no-cors fallback: assume success
-}
-
-// ═══════════════════════════════════════════
-//  LOGIN / LOGOUT
-// ═══════════════════════════════════════════
-async function doLogin(){
-  const ntid  = document.getElementById('l-ntid').value.trim().toUpperCase();
-  const name  = document.getElementById('l-name').value.trim();
-  const errEl = document.getElementById('l-err');
-  if(!ntid||!name){ errEl.style.display='block'; return; }
-  errEl.style.display='none';
-
-  isAdmin     = ADMIN_IDS.includes(ntid);
-  currentUser = { ntid, name };
-
-  loading(true,'Loading your records…');
+// ─── Storage helpers (shared across all users) ───────────────────────────────
+async function loadRecords() {
   try {
-    await loadMyRecords(false);
-    if(isAdmin) await loadAllRecords();
+    const r = await window.storage.get("migrations_v1", true);
+    return r ? JSON.parse(r.value) : [];
+  } catch { return []; }
+}
+async function saveRecords(recs) {
+  try { await window.storage.set("migrations_v1", JSON.stringify(recs), true); } catch {}
+}
+async function loadAdmins() {
+  try {
+    const r = await window.storage.get("admins_v1", true);
+    return r ? JSON.parse(r.value) : ADMIN_NTIDS;
+  } catch { return ADMIN_NTIDS; }
+}
+async function saveAdmins(list) {
+  try { await window.storage.set("admins_v1", JSON.stringify(list), true); } catch {}
+}
 
-    // Update UI
-    document.getElementById('tb-avatar').textContent = name.charAt(0).toUpperCase();
-    const h = new Date().getHours();
-    const g = h<12?'Morning':h<17?'Afternoon':'Evening';
-    document.getElementById('greet').textContent = `Good ${g}, ${name.split(' ')[0]}! 👋`;
+// ─── Components ──────────────────────────────────────────────────────────────
+function Badge({ status }) {
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${STATUS_COLOR[status] || "bg-gray-100 text-gray-600"}`}>
+      {status}
+    </span>
+  );
+}
 
-    if(isAdmin){
-      document.getElementById('nb-admin').style.display = '';
-      document.getElementById('tb-ntid').innerHTML = `<span class="admin-crown">👑</span>${ntid}`;
+function Input({ label, required, error, ...props }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-magenta-400 bg-white ${error ? "border-red-400" : "border-gray-200"}`}
+        style={{"--tw-ring-color": "#e20074"}}
+        {...props}
+      />
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+function Select({ label, required, options, ...props }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2" style={{"--tw-ring-color":"#e20074"}} {...props}>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [ntid, setNtid] = useState("");
+  const [dealer, setDealer] = useState("");
+  const [err, setErr] = useState("");
+
+  const handle = () => {
+    if (!ntid.trim()) return setErr("NTID is required.");
+    if (!dealer.trim()) return setErr("Dealer/Sales Code is required.");
+    setErr("");
+    onLogin(ntid.trim().toUpperCase(), dealer.trim().toUpperCase());
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{background: "linear-gradient(135deg,#e20074 0%,#7b0044 100%)"}}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{background:"#e20074"}}>
+            <svg viewBox="0 0 24 24" className="w-8 h-8 fill-white">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">Migration Tracker</h1>
+          <p className="text-sm text-gray-500 mt-1">Company X → Company Y</p>
+        </div>
+
+        <div className="space-y-4">
+          <Input
+            label="Employee NTID"
+            placeholder="e.g. JSMITH01"
+            required
+            value={ntid}
+            onChange={e => setNtid(e.target.value)}
+          />
+          <Input
+            label="Dealer / Sales Code"
+            placeholder="e.g. DLR12345"
+            required
+            value={dealer}
+            onChange={e => setDealer(e.target.value)}
+          />
+          {err && <p className="text-sm text-red-500">{err}</p>}
+          <button
+            onClick={handle}
+            className="w-full py-3 rounded-xl text-white font-bold text-sm transition hover:opacity-90 active:scale-95"
+            style={{background:"#e20074"}}
+          >
+            Sign In
+          </button>
+        </div>
+        <p className="text-center text-xs text-gray-400 mt-6">Admin? Use your admin NTID to access the admin panel.</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── MIGRATION FORM ───────────────────────────────────────────────────────────
+function MigrationForm({ ntid, dealerCode, onSaved, editRecord, onCancel }) {
+  const [form, setForm] = useState(editRecord ? { ...editRecord } : { ...EMPTY_FORM });
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const validate = () => {
+    const e = {};
+    if (!form.metroPhone.match(/^\d{10}$/)) e.metroPhone = "Must be 10 digits";
+    if (!form.metroAccount.match(/^\d+$/)) e.metroAccount = "Must be numeric";
+    if (!form.metroPIN.match(/^\d{4,8}$/)) e.metroPIN = "Must be 4–8 digits";
+    if (!form.customerName.trim()) e.customerName = "Required";
+    if (!form.zipCode.match(/^\d{5}$/)) e.zipCode = "Must be 5 digits";
+    if (!form.orderID.trim()) e.orderID = "Required";
+    if (!form.tmobileAccount.match(/^\d+$/)) e.tmobileAccount = "Must be numeric";
+    if (!form.linesMigrated || isNaN(form.linesMigrated)) e.linesMigrated = "Must be a number";
+    return e;
+  };
+
+  const handleSubmit = async () => {
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    const recs = await loadRecords();
+    if (editRecord) {
+      const idx = recs.findIndex(r => r.id === editRecord.id);
+      if (idx !== -1) recs[idx] = { ...editRecord, ...form, updatedAt: new Date().toISOString() };
     } else {
-      document.getElementById('tb-ntid').textContent = ntid;
+      recs.push({ ...form, id: uid(), ntid, dealerCode, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     }
-
-    document.getElementById('s-login').classList.remove('active');
-    document.getElementById('s-app').classList.add('active');
-    switchPage('dashboard', document.getElementById('nb-dashboard'));
-  } catch(e){
-    currentUser = null;
-    toast('❌ Cannot reach Google Sheets. Make sure the Apps Script is deployed as "Anyone" with /exec URL.','err');
-    console.error('Login error:', e);
-  } finally {
-    loading(false);
-  }
-}
-
-function doLogout(){
-  currentUser = null; myRecords = []; allRecords = []; isAdmin = false; filterVal = 'all';
-  document.getElementById('s-app').classList.remove('active');
-  document.getElementById('s-login').classList.add('active');
-  document.getElementById('l-ntid').value = '';
-  document.getElementById('l-name').value = '';
-  document.getElementById('nb-admin').style.display = 'none';
-}
-
-// ═══════════════════════════════════════════
-//  PARSE ROWS FROM SHEET
-// ═══════════════════════════════════════════
-function parseRows(rows){
-  if(!Array.isArray(rows)) return [];
-  return rows
-    .filter(r => Array.isArray(r) && r.length > 0 && r[0] !== '' && r[0] !== 'ID')
-    .map(r => ({
-      id:            String(r[0]||''),
-      submittedAt:   String(r[1]||''),
-      ntid:          String(r[2]||''),
-      repName:       String(r[3]||''),
-      customerName:  String(r[4]||''),
-      metroPhone:    String(r[5]||'').replace(/\D/g,''),
-      metroAcct:     String(r[6]||''),
-      pin:           String(r[7]||''),
-      devices:       String(r[8]||''),
-      metroPlan:     String(r[9]||''),
-      tmoPlan:       String(r[10]||''),
-      dateOrdered:   String(r[11]||''),
-      zip:           String(r[12]||''),
-      orderId:       String(r[13]||''),
-      tmoAcct:       String(r[14]||''),
-      linesMigrated: parseInt(r[15])||0,
-      migrationDone: String(r[16]||'No'),
-    }));
-}
-
-// ═══════════════════════════════════════════
-//  DATA LOADING
-// ═══════════════════════════════════════════
-async function loadMyRecords(showUI=true){
-  if(showUI) loading(true,'Refreshing your records…');
-  try {
-    const data = await apiGet({ action:'getRecords', ntid: currentUser.ntid });
-    // Handle both {rows:[]} and raw [] responses
-    const rawRows = Array.isArray(data) ? data : (data.rows || []);
-    myRecords = parseRows(rawRows);
-    renderDashboard();
-    renderMyRecords();
-    renderLeaderboard();
-    if(showUI) toast('✅ Records refreshed','ok');
-  } catch(e){
-    console.error('loadMyRecords error:', e);
-    if(showUI) toast('❌ Refresh failed — check connection','err');
-    throw e; // re-throw so login can catch it
-  } finally {
-    if(showUI) loading(false);
-  }
-}
-
-async function loadAllRecords(){
-  try {
-    const data = await apiGet({ action:'getAllRecords', adminKey:'TMOBILE_ADMIN_2024' });
-    const rawRows = Array.isArray(data) ? data : (data.rows || []);
-    allRecords = parseRows(rawRows);
-    renderAdmin();
-    renderLeaderboard();
-  } catch(e){ console.error('loadAllRecords error:', e); }
-}
-
-// ═══════════════════════════════════════════
-//  SUBMIT NEW RECORD
-// ═══════════════════════════════════════════
-async function submitRecord(){
-  const name   = document.getElementById('f-name').value.trim();
-  const phone  = document.getElementById('f-phone').value.trim().replace(/\D/g,'');
-  const metro  = document.getElementById('f-metro-acct').value.trim();
-  const status = document.getElementById('f-status').value;
-
-  if(!name)  { toast('⚠️ Customer name required','warn'); return; }
-  if(!phone) { toast('⚠️ Metro phone required','warn'); return; }
-  if(!metro) { toast('⚠️ Metro account # required','warn'); return; }
-  if(!status){ toast('⚠️ Select migration status','warn'); return; }
-
-  const rec = {
-    id:            uid(),
-    submittedAt:   new Date().toISOString(),
-    ntid:          currentUser.ntid,
-    repName:       currentUser.name,
-    customerName:  name,
-    metroPhone:    phone,
-    metroAcct:     metro,
-    pin:           document.getElementById('f-pin').value.trim(),
-    devices:       document.getElementById('f-devices').value.trim(),
-    metroPlan:     document.getElementById('f-metro-plan').value.trim(),
-    tmoPlan:       document.getElementById('f-tmo-plan').value.trim(),
-    dateOrdered:   document.getElementById('f-date').value,
-    zip:           document.getElementById('f-zip').value.trim(),
-    orderId:       document.getElementById('f-order-id').value.trim(),
-    tmoAcct:       document.getElementById('f-tmo-acct').value.trim(),
-    linesMigrated: parseInt(document.getElementById('f-lines').value)||0,
-    migrationDone: status,
+    await saveRecords(recs);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => { setSaved(false); onSaved(); }, 1200);
   };
 
-  loading(true,'Saving to Google Sheets…');
-  try {
-    await apiPost({ action:'addRecord', data: rec });
-    // Add to local state immediately
-    myRecords.unshift(rec);
-    if(isAdmin) allRecords.unshift(rec);
-    renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
-    clearForm();
-    toast('✅ Migration saved!','ok');
-    switchPage('dashboard', document.getElementById('nb-dashboard'));
-  } catch(e){
-    console.error('submitRecord error:', e);
-    toast('❌ Save failed — check your connection','err');
-  } finally { loading(false); }
-}
+  const F = form;
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-800">{editRecord ? "Edit Migration Record" : "New Migration Record"}</h2>
+        {onCancel && <button onClick={onCancel} className="text-sm text-gray-400 hover:text-gray-600">✕ Cancel</button>}
+      </div>
 
-// ═══════════════════════════════════════════
-//  DELETE RECORD
-// ═══════════════════════════════════════════
-async function deleteRecord(){
-  if(!modalId) return;
-  if(!confirm('Delete this record permanently from Google Sheets?')) return;
-  loading(true,'Deleting…');
-  try {
-    await apiPost({ action:'deleteRecord', id: modalId, ntid: currentUser.ntid });
-    myRecords   = myRecords.filter(r=>r.id!==modalId);
-    if(isAdmin) allRecords = allRecords.filter(r=>r.id!==modalId);
-    closeModal();
-    renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
-    toast('Record deleted','ok');
-  } catch(e){
-    console.error('deleteRecord error:', e);
-    toast('❌ Delete failed','err');
-  } finally { loading(false); }
-}
+      {/* Read-only context */}
+      <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+        <div><p className="text-xs text-gray-400 font-medium">NTID</p><p className="text-sm font-bold text-gray-700">{ntid}</p></div>
+        <div><p className="text-xs text-gray-400 font-medium">Dealer / Sales Code</p><p className="text-sm font-bold text-gray-700">{dealerCode}</p></div>
+      </div>
 
-// ═══════════════════════════════════════════
-//  RENDER — DASHBOARD
-// ═══════════════════════════════════════════
-function renderDashboard(){
-  const done = myRecords.filter(r=>r.migrationDone==='Yes').length;
-  const prog = myRecords.filter(r=>r.migrationDone==='In Progress').length;
-  const lines = myRecords.reduce((s,r)=>s+(r.linesMigrated||0),0);
-  document.getElementById('d-total').textContent = myRecords.length;
-  document.getElementById('d-done').textContent  = done;
-  document.getElementById('d-prog').textContent  = prog;
-  document.getElementById('d-lines').textContent = lines;
-  const recent = myRecords.slice(0,5);
-  document.getElementById('dash-list').innerHTML = recent.length
-    ? recent.map(r=>recCardHTML(r, false)).join('')
-    : `<div class="empty"><div class="empty-icon">📋</div><p>No records yet.<br>Tap <b>Add</b> to log a migration.</p></div>`;
-}
-
-// ═══════════════════════════════════════════
-//  RENDER — MY RECORDS
-// ═══════════════════════════════════════════
-function setFilter(el){
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
-  el.classList.add('on');
-  filterVal = el.dataset.f;
-  renderMyRecords();
-}
-function renderMyRecords(){
-  let recs = myRecords;
-  if(filterVal!=='all') recs = recs.filter(r=>r.migrationDone===filterVal);
-  document.getElementById('rec-list').innerHTML = recs.length
-    ? recs.map(r=>recCardHTML(r, false)).join('')
-    : `<div class="empty"><div class="empty-icon">🔍</div><p>No records match this filter.</p></div>`;
-}
-
-function recCardHTML(r, showRep=false){
-  const cc = cardClass(r.migrationDone);
-  const dt = r.dateOrdered ? fmtDate(r.dateOrdered) : (r.submittedAt ? fmtDate(r.submittedAt.split('T')[0]) : '—');
-  return `<div class="rec-card ${cc}" onclick="openModal('${r.id}')">
-    <div class="rc-top">
+      {/* Section: Customer */}
       <div>
-        <div class="rc-name">${r.customerName||'—'}</div>
-        ${showRep?`<div class="rc-ntid">Rep: ${r.ntid||'—'} · ${r.repName||''}</div>`:`<div class="rc-ntid">${fmtPhone(r.metroPhone)}</div>`}
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Customer Information</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input label="Customer Name" placeholder="Last, First" required value={F.customerName} onChange={e=>set("customerName",e.target.value)} error={errors.customerName} />
+          <Input label="Metro Phone Number" placeholder="10 digits" required value={F.metroPhone} onChange={e=>set("metroPhone",e.target.value)} error={errors.metroPhone} />
+          <Input label="Metro Account Number" placeholder="Numeric" required value={F.metroAccount} onChange={e=>set("metroAccount",e.target.value)} error={errors.metroAccount} />
+          <Input label="Metro / T-Mobile PIN" placeholder="4–8 digits" required value={F.metroPIN} onChange={e=>set("metroPIN",e.target.value)} error={errors.metroPIN} />
+          <Input label="Zip Code" placeholder="5 digits" required value={F.zipCode} onChange={e=>set("zipCode",e.target.value)} error={errors.zipCode} />
+        </div>
       </div>
-      ${statusPill(r.migrationDone)}
+
+      {/* Section: Order */}
+      <div>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Order Details</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input label="Order ID" placeholder="Alphanumeric" required value={F.orderID} onChange={e=>set("orderID",e.target.value)} error={errors.orderID} />
+          <Input label="Devices Ordered" placeholder='e.g. iPhone 15 x2' value={F.devicesOrdered} onChange={e=>set("devicesOrdered",e.target.value)} />
+          <Input label="Date Ordered" type="date" required value={F.dateOrdered} onChange={e=>set("dateOrdered",e.target.value)} />
+          <Input label="Lines Migrated" type="number" min="1" required value={F.linesMigrated} onChange={e=>set("linesMigrated",e.target.value)} error={errors.linesMigrated} />
+        </div>
+      </div>
+
+      {/* Section: Plans */}
+      <div>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Plan Details</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select label="Metro Monthly Plan" options={METRO_PLANS} value={F.metroPlan} onChange={e=>set("metroPlan",e.target.value)} />
+          <Select label="T-Mobile Monthly Plan" options={TMOBILE_PLANS} value={F.tmobilePlan} onChange={e=>set("tmobilePlan",e.target.value)} />
+          <Input label="T-Mobile Account Number" placeholder="Numeric" required value={F.tmobileAccount} onChange={e=>set("tmobileAccount",e.target.value)} error={errors.tmobileAccount} />
+        </div>
+      </div>
+
+      {/* Status */}
+      <div>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Migration Status</p>
+        <div className="flex gap-3">
+          {MIGRATION_STATUS.map(s => (
+            <button key={s} onClick={() => set("migrationCompleted", s)}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition ${F.migrationCompleted === s ? STATUS_COLOR[s] + " border-current" : "border-gray-200 text-gray-400 hover:border-gray-300"}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={handleSubmit}
+        disabled={saving || saved}
+        className="w-full py-3 rounded-xl text-white font-bold text-sm transition hover:opacity-90 disabled:opacity-60"
+        style={{background: saved ? "#10b981" : "#e20074"}}
+      >
+        {saved ? "✓ Saved!" : saving ? "Saving…" : editRecord ? "Update Record" : "Submit Migration"}
+      </button>
     </div>
-    <div class="rc-info">
-      <span>📱 ${fmtPhone(r.metroPhone)}</span>
-      <span>📦 ${r.tmoPlan||'—'}</span>
-      <span>📶 ${r.linesMigrated||0} line${r.linesMigrated!==1?'s':''}</span>
-      <span>🗓 ${dt}</span>
-    </div>
-    <div class="rc-foot">
-      <span>Order: ${r.orderId||'—'}</span>
-      <span>${r.zip||''}</span>
-    </div>
-  </div>`;
+  );
 }
 
-// ═══════════════════════════════════════════
-//  RENDER — LEADERBOARD
-// ═══════════════════════════════════════════
-function renderLeaderboard(){
-  // Build from all known records (my own for non-admin, all for admin)
-  const src = isAdmin ? allRecords : myRecords;
-  // We want team-wide; if not admin we'll still try
-  const counts = {};
-  const names  = {};
-  src.filter(r=>r.migrationDone==='Yes').forEach(r=>{
-    counts[r.ntid] = (counts[r.ntid]||0)+1;
-    if(r.repName) names[r.ntid] = r.repName;
-  });
-  // include own record
-  if(!counts[currentUser.ntid]){
-    const myDone = myRecords.filter(r=>r.migrationDone==='Yes').length;
-    if(myDone>0){ counts[currentUser.ntid]=myDone; names[currentUser.ntid]=currentUser.name; }
-  }
-  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-  const max = sorted[0]?.[1]||1;
-  const ranks = ['🥇','🥈','🥉'];
-  const rcls  = ['rank-1','rank-2','rank-3'];
-  if(!sorted.length){
-    document.getElementById('lb-list').innerHTML=`<div class="empty"><div class="empty-icon">🏆</div><p>No completed migrations yet.<br>Be the first!</p></div>`;
-    return;
-  }
-  document.getElementById('lb-list').innerHTML = sorted.map(([ntid,cnt],i)=>{
-    const isMe = ntid===currentUser.ntid;
-    const pct  = Math.round((cnt/max)*100);
-    return `<div class="lb-row" style="${isMe?'border:2px solid var(--mag);':''}">
-      <div class="lb-rank ${rcls[i]||''}">${ranks[i]||`#${i+1}`}</div>
-      <div style="flex:1;">
-        <div style="font-weight:700;font-size:.95rem;">${names[ntid]||ntid}${isMe?'<span class="you-tag">YOU</span>':''}</div>
-        <div style="font-size:.75rem;color:var(--gray);">${ntid} · ${cnt} migration${cnt!==1?'s':''}</div>
-        <div class="lb-bar-wrap"><div class="lb-bar" style="width:${pct}%"></div></div>
-      </div>
-      <div style="font-family:'Barlow Condensed';font-weight:900;font-size:1.3rem;color:var(--mag);">${cnt}</div>
-    </div>`;
-  }).join('');
+// ─── RECORDS TABLE ─────────────────────────────────────────────────────────────
+function RecordsTable({ records, onEdit, isAdmin }) {
+  const cols = ["Customer", "Phone", "Order ID", "Lines", "Metro Plan", "T-Mobile Plan", "Date", "Status"];
+  if (!records.length) return <p className="text-center text-gray-400 text-sm py-12">No records found.</p>;
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50">
+            {isAdmin && <th className="px-4 py-3">NTID</th>}
+            {isAdmin && <th className="px-4 py-3">Store</th>}
+            {cols.map(c => <th key={c} className="px-4 py-3 whitespace-nowrap">{c}</th>)}
+            <th className="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {records.map(r => (
+            <tr key={r.id} className="hover:bg-gray-50 transition">
+              {isAdmin && <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.ntid}</td>}
+              {isAdmin && <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.dealerCode}</td>}
+              <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-800">{r.customerName || "—"}</td>
+              <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-600">{r.metroPhone}</td>
+              <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-600">{r.orderID}</td>
+              <td className="px-4 py-3 text-center font-bold" style={{color:"#e20074"}}>{r.linesMigrated}</td>
+              <td className="px-4 py-3 text-xs text-gray-500">{r.metroPlan}</td>
+              <td className="px-4 py-3 text-xs text-gray-500">{r.tmobilePlan}</td>
+              <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(r.dateOrdered)}</td>
+              <td className="px-4 py-3"><Badge status={r.migrationCompleted} /></td>
+              <td className="px-4 py-3">
+                {onEdit && <button onClick={() => onEdit(r)} className="text-xs text-blue-500 hover:underline">Edit</button>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-// ═══════════════════════════════════════════
-//  RENDER — ADMIN
-// ═══════════════════════════════════════════
-function adminTab(t){
-  adminView = t;
-  document.getElementById('at-all').classList.toggle('on', t==='all');
-  document.getElementById('at-reps').classList.toggle('on', t==='reps');
-  document.getElementById('admin-all-view').style.display = t==='all'?'':'none';
-  document.getElementById('admin-reps-view').style.display = t==='reps'?'':'none';
-  if(t==='reps') renderAdminReps();
-  else renderAdminAll();
-}
-function renderAdmin(){
-  const done  = allRecords.filter(r=>r.migrationDone==='Yes').length;
-  const reps  = new Set(allRecords.map(r=>r.ntid)).size;
-  document.getElementById('a-total').textContent = allRecords.length;
-  document.getElementById('a-done').textContent  = done;
-  document.getElementById('a-reps').textContent  = reps;
-  renderAdminAll(); renderAdminReps(); renderLeaderboard();
-}
-function renderAdminAll(){
-  const q = (document.getElementById('admin-search')?.value||'').toLowerCase();
-  let recs = allRecords;
-  if(q) recs = recs.filter(r=>[r.customerName,r.metroPhone,r.ntid,r.repName,r.orderId].some(v=>(v||'').toLowerCase().includes(q)));
-  document.getElementById('admin-rec-list').innerHTML = recs.length
-    ? recs.map(r=>recCardHTML(r, true)).join('')
-    : `<div class="empty"><p>No records match.</p></div>`;
-}
-function renderAdminReps(){
-  const counts={}, names={}, lines={};
-  allRecords.forEach(r=>{
-    counts[r.ntid]=(counts[r.ntid]||0)+(r.migrationDone==='Yes'?1:0);
-    lines[r.ntid]=(lines[r.ntid]||0)+(r.linesMigrated||0);
-    if(r.repName) names[r.ntid]=r.repName;
-  });
-  const all = {};
-  allRecords.forEach(r=>{ all[r.ntid]=(all[r.ntid]||0)+1; });
-  const sorted = Object.keys(all).sort((a,b)=>(counts[b]||0)-(counts[a]||0));
-  const maxC = Math.max(...Object.values(counts),1);
-  document.getElementById('admin-rep-list').innerHTML = sorted.map(ntid=>{
-    const pct = Math.round(((counts[ntid]||0)/maxC)*100);
-    return `<div class="rep-row">
-      <div class="rep-ava">${(names[ntid]||ntid).charAt(0).toUpperCase()}</div>
-      <div class="rep-info">
-        <div class="rep-name">${names[ntid]||'—'} <span style="color:var(--gray);font-size:.78rem;">(${ntid})</span></div>
-        <div class="rep-stat">${all[ntid]} total · ${counts[ntid]||0} done · ${lines[ntid]||0} lines</div>
-        <div class="rep-bar-wrap"><div class="rep-bar" style="width:${pct}%"></div></div>
-      </div>
-      <div class="rep-count">${counts[ntid]||0}</div>
-    </div>`;
-  }).join('') || `<div class="empty"><p>No reps found.</p></div>`;
-}
-
-// ═══════════════════════════════════════════
-//  MODAL
-// ═══════════════════════════════════════════
-function openModal(id){
-  const src = isAdmin ? allRecords : myRecords;
-  const r = src.find(x=>x.id===id);
-  if(!r) return;
-  modalId = id;
-  document.getElementById('modal-title').textContent = r.customerName||'Record';
-  const rows=[
-    ['Customer Name',     r.customerName],
-    ['Metro Phone',       fmtPhone(r.metroPhone)],
-    ['Metro Account #',   r.metroAcct],
-    ['Metro Plan',        r.metroPlan],
-    ['T-Mobile Account',  r.tmoAcct],
-    ['T-Mobile Plan',     r.tmoPlan],
-    ['Order ID',          r.orderId],
-    ['Date Ordered',      fmtDate(r.dateOrdered)],
-    ['Devices',           r.devices],
-    ['Lines Migrated',    r.linesMigrated],
-    ['Zip Code',          r.zip],
-    ['Rep NTID',          r.ntid],
-    ['Rep Name',          r.repName],
-    ['Submitted',         r.submittedAt?new Date(r.submittedAt).toLocaleString():'—'],
+// ─── STATS CARD ───────────────────────────────────────────────────────────────
+function StatsRow({ records }) {
+  const total = records.length;
+  const done = records.filter(r => r.migrationCompleted === "Yes").length;
+  const inprog = records.filter(r => r.migrationCompleted === "In Progress").length;
+  const failed = records.filter(r => r.migrationCompleted === "No").length;
+  const lines = records.reduce((a, r) => a + (parseInt(r.linesMigrated) || 0), 0);
+  const stats = [
+    { label: "Total Records", value: total, color: "#e20074" },
+    { label: "Completed", value: done, color: "#10b981" },
+    { label: "In Progress", value: inprog, color: "#f59e0b" },
+    { label: "Not Completed", value: failed, color: "#ef4444" },
+    { label: "Lines Migrated", value: lines, color: "#6366f1" },
   ];
-  document.getElementById('modal-body').innerHTML = rows.map(([k,v])=>
-    `<div class="d-row"><span class="d-key">${k}</span><span class="d-val">${v||'—'}</span></div>`
-  ).join('');
-
-  // Highlight current status button
-  setStatusBtnHighlight(r.migrationDone);
-
-  // Show status update box only if this rep owns the record or is admin
-  const canEdit = isAdmin || r.ntid===currentUser.ntid;
-  document.getElementById('modal-status-box').style.display = canEdit ? '' : 'none';
-
-  // Only show delete if own record or admin
-  const canDel = isAdmin || r.ntid===currentUser.ntid;
-  document.getElementById('modal-del').style.display = canDel?'':'none';
-  document.getElementById('modal').classList.remove('hidden');
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+      {stats.map(s => (
+        <div key={s.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+          <p className="text-2xl font-black" style={{ color: s.color }}>{s.value}</p>
+          <p className="text-xs text-gray-500 mt-1 font-medium">{s.label}</p>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function setStatusBtnHighlight(status){
-  document.getElementById('sbtn-yes').classList.toggle('current', status==='Yes');
-  document.getElementById('sbtn-prog').classList.toggle('current', status==='In Progress');
-  document.getElementById('sbtn-no').classList.toggle('current', status==='No');
-}
+// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
+function AdminPanel({ currentNtid, records, onBack, onRefresh }) {
+  const [filterNtid, setFilterNtid] = useState("");
+  const [filterStore, setFilterStore] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [editRecord, setEditRecord] = useState(null);
+  const [tab, setTab] = useState("records"); // records | admins
+  const [admins, setAdmins] = useState([]);
+  const [newAdmin, setNewAdmin] = useState("");
 
-async function updateStatus(newStatus){
-  if(!modalId) return;
-  const src = isAdmin ? allRecords : myRecords;
-  const r = src.find(x=>x.id===modalId);
-  if(!r) return;
-  if(r.migrationDone === newStatus){ toast('Already set to this status','warn'); return; }
+  useEffect(() => { loadAdmins().then(setAdmins); }, []);
 
-  // Optimistic UI
-  const oldStatus = r.migrationDone;
-  r.migrationDone = newStatus;
-  setStatusBtnHighlight(newStatus);
+  const filtered = records.filter(r =>
+    (!filterNtid || r.ntid.includes(filterNtid.toUpperCase())) &&
+    (!filterStore || r.dealerCode.includes(filterStore.toUpperCase())) &&
+    (filterStatus === "All" || r.migrationCompleted === filterStatus)
+  );
 
-  // Update in myRecords too if admin viewing allRecords
-  const myR = myRecords.find(x=>x.id===modalId);
-  if(myR) myR.migrationDone = newStatus;
+  // Unique stores/employees for summary
+  const stores = [...new Set(records.map(r => r.dealerCode))];
+  const emps = [...new Set(records.map(r => r.ntid))];
 
-  // Pulse the buttons to show saving
-  const box = document.getElementById('modal-status-box');
-  box.classList.add('updating-pulse');
-
-  try {
-    await apiPost({ action:'updateStatus', id: modalId, ntid: currentUser.ntid, status: newStatus });
-
-    // Re-render all views with updated status
-    renderDashboard();
-    renderMyRecords();
-    if(isAdmin) renderAdmin();
-
-    const labels = { 'Yes':'✅ Marked as Completed!', 'In Progress':'🔄 Marked as In Progress', 'No':'❌ Marked as Not Completed' };
-    toast(labels[newStatus]||'Status updated', 'ok');
-  } catch(e){
-    // Revert on failure
-    r.migrationDone = oldStatus;
-    if(myR) myR.migrationDone = oldStatus;
-    setStatusBtnHighlight(oldStatus);
-    toast('❌ Update failed. Try again.','err');
-    console.error(e);
-  } finally {
-    box.classList.remove('updating-pulse');
-  }
-}
-
-function closeModal(){
-  document.getElementById('modal').classList.add('hidden');
-  toggleEditForm(false);
-  modalId=null;
-}
-function closeModalClick(e){ if(e.target===document.getElementById('modal')) closeModal(); }
-
-// ═══════════════════════════════════════════
-//  EDIT RECORD
-// ═══════════════════════════════════════════
-function toggleEditForm(open){
-  const wrap = document.getElementById('edit-form-wrap');
-  const btns = document.getElementById('modal-action-btns');
-  wrap.classList.toggle('open', open);
-  // Scroll to edit form when opening
-  if(open) setTimeout(()=>wrap.scrollIntoView({behavior:'smooth',block:'nearest'}), 50);
-
-  if(open){
-    // Populate edit fields with current record values
-    const src = isAdmin ? allRecords : myRecords;
-    const r = src.find(x=>x.id===modalId);
-    if(!r) return;
-    document.getElementById('e-name').value       = r.customerName  || '';
-    document.getElementById('e-phone').value      = r.metroPhone    || '';
-    document.getElementById('e-zip').value        = r.zip           || '';
-    document.getElementById('e-metro-acct').value = r.metroAcct     || '';
-    document.getElementById('e-pin').value        = r.pin           || '';
-    document.getElementById('e-metro-plan').value = r.metroPlan     || '';
-    document.getElementById('e-tmo-acct').value   = r.tmoAcct       || '';
-    document.getElementById('e-tmo-plan').value   = r.tmoPlan       || '';
-    document.getElementById('e-order-id').value   = r.orderId       || '';
-    document.getElementById('e-date').value       = r.dateOrdered   || '';
-    document.getElementById('e-devices').value    = r.devices       || '';
-    document.getElementById('e-lines').value      = r.linesMigrated || 0;
-    document.getElementById('e-status').value     = r.migrationDone || 'No';
-  }
-}
-
-async function saveEdit(){
-  if(!modalId) return;
-  const src = isAdmin ? allRecords : myRecords;
-  const r = src.find(x=>x.id===modalId);
-  if(!r) return;
-
-  const newName = document.getElementById('e-name').value.trim();
-  if(!newName){ toast('⚠️ Customer name cannot be empty','warn'); return; }
-
-  // Build updated record (merge changes onto existing)
-  const updated = {
-    ...r,
-    customerName:  newName,
-    metroPhone:    document.getElementById('e-phone').value.trim().replace(/\D/g,''),
-    zip:           document.getElementById('e-zip').value.trim(),
-    metroAcct:     document.getElementById('e-metro-acct').value.trim(),
-    pin:           document.getElementById('e-pin').value.trim(),
-    metroPlan:     document.getElementById('e-metro-plan').value.trim(),
-    tmoAcct:       document.getElementById('e-tmo-acct').value.trim(),
-    tmoPlan:       document.getElementById('e-tmo-plan').value.trim(),
-    orderId:       document.getElementById('e-order-id').value.trim(),
-    dateOrdered:   document.getElementById('e-date').value,
-    devices:       document.getElementById('e-devices').value.trim(),
-    linesMigrated: parseInt(document.getElementById('e-lines').value)||0,
-    migrationDone: document.getElementById('e-status').value,
+  const addAdmin = async () => {
+    const n = newAdmin.trim().toUpperCase();
+    if (!n || admins.includes(n)) return;
+    const updated = [...admins, n];
+    setAdmins(updated);
+    await saveAdmins(updated);
+    setNewAdmin("");
+  };
+  const removeAdmin = async (a) => {
+    if (a === currentNtid) return;
+    const updated = admins.filter(x => x !== a);
+    setAdmins(updated);
+    await saveAdmins(updated);
   };
 
-  loading(true,'Saving changes…');
-  try {
-    await apiPost({ action:'updateRecord', data: updated, ntid: currentUser.ntid });
+  if (editRecord) return (
+    <div className="max-w-3xl mx-auto p-4">
+      <MigrationForm
+        ntid={editRecord.ntid}
+        dealerCode={editRecord.dealerCode}
+        editRecord={editRecord}
+        onSaved={() => { setEditRecord(null); onRefresh(); }}
+        onCancel={() => setEditRecord(null)}
+      />
+    </div>
+  );
 
-    // Update local state
-    Object.assign(r, updated);
-    const myR = myRecords.find(x=>x.id===modalId);
-    if(myR) Object.assign(myR, updated);
+  return (
+    <div className="max-w-7xl mx-auto p-4 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-black text-gray-800">Admin Dashboard</h1>
+          <p className="text-sm text-gray-500">{stores.length} stores · {emps.length} employees · {records.length} records</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onRefresh} className="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200">↻ Refresh</button>
+          <button onClick={onBack} className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-500 hover:bg-gray-50">Sign Out</button>
+        </div>
+      </div>
 
-    // Refresh modal view with new values
-    toggleEditForm(false);
-    openModal(modalId);
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        {["records","admins"].map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-semibold capitalize border-b-2 transition ${tab===t ? "border-pink-600 text-pink-600" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
+            {t === "records" ? "Migration Records" : "Manage Admins"}
+          </button>
+        ))}
+      </div>
 
-    renderDashboard(); renderMyRecords(); if(isAdmin) renderAdmin();
-    toast('✅ Record updated!','ok');
-  } catch(e){
-    console.error('saveEdit error:',e);
-    toast('❌ Update failed. Try again.','err');
-  } finally { loading(false); }
+      {tab === "records" && <>
+        <StatsRow records={filtered} />
+        {/* Filters */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Filter by NTID</label>
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Employee NTID" value={filterNtid} onChange={e=>setFilterNtid(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Filter by Store</label>
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Dealer Code" value={filterStore} onChange={e=>setFilterStore(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Status</label>
+            <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm" value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+              <option>All</option>
+              {MIGRATION_STATUS.map(s=><option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <button onClick={()=>{setFilterNtid("");setFilterStore("");setFilterStatus("All");}} className="px-4 py-2 rounded-lg text-sm text-gray-500 bg-gray-100 hover:bg-gray-200">Clear</button>
+        </div>
+        {/* Showing */}
+        <p className="text-xs text-gray-400">Showing {filtered.length} of {records.length} records</p>
+        <RecordsTable records={filtered} onEdit={setEditRecord} isAdmin />
+      </>}
+
+      {tab === "admins" && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 max-w-md space-y-4">
+          <h3 className="font-bold text-gray-700">Admin NTIDs</h3>
+          <ul className="space-y-2">
+            {admins.map(a => (
+              <li key={a} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2">
+                <span className="font-mono text-sm font-semibold text-gray-700">{a}</span>
+                {a !== currentNtid && (
+                  <button onClick={()=>removeAdmin(a)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                )}
+                {a === currentNtid && <span className="text-xs text-gray-400">(you)</span>}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1" placeholder="New Admin NTID" value={newAdmin} onChange={e=>setNewAdmin(e.target.value)} />
+            <button onClick={addAdmin} className="px-4 py-2 rounded-lg text-sm text-white font-bold" style={{background:"#e20074"}}>Add</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-// ═══════════════════════════════════════════
-//  NAVIGATION
-// ═══════════════════════════════════════════
-function switchPage(page, btn){
-  ['dashboard','add','records','leaderboard','admin'].forEach(p=>{
-    document.getElementById('p-'+p).classList.remove('active');
-  });
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('p-'+page).classList.add('active');
-  if(btn) btn.classList.add('active');
-  if(page==='add') document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
-  if(page==='leaderboard'){ if(isAdmin) loadAllRecords(); else renderLeaderboard(); }
-  if(page==='admin'){ loading(true,'Loading all records…'); loadAllRecords().finally(()=>loading(false)); }
+// ─── EMPLOYEE VIEW ────────────────────────────────────────────────────────────
+function EmployeeView({ ntid, dealerCode, onLogout }) {
+  const [records, setRecords] = useState([]);
+  const [view, setView] = useState("list"); // list | new | edit
+  const [editRecord, setEditRecord] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const all = await loadRecords();
+    setRecords(all.filter(r => r.ntid === ntid));
+    setLoading(false);
+  }, [ntid]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const myStats = {
+    total: records.length,
+    done: records.filter(r=>r.migrationCompleted==="Yes").length,
+    inprog: records.filter(r=>r.migrationCompleted==="In Progress").length,
+    lines: records.reduce((a,r)=>a+(parseInt(r.linesMigrated)||0),0),
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-black text-gray-800">My Migrations</h1>
+          <p className="text-xs text-gray-500 font-mono">NTID: <b className="text-gray-700">{ntid}</b> · Store: <b className="text-gray-700">{dealerCode}</b></p>
+        </div>
+        <div className="flex gap-2">
+          {view === "list" && (
+            <button onClick={()=>setView("new")} className="px-4 py-2 rounded-xl text-sm font-bold text-white" style={{background:"#e20074"}}>
+              + New Migration
+            </button>
+          )}
+          <button onClick={onLogout} className="px-4 py-2 rounded-xl text-sm text-gray-500 border border-gray-200 hover:bg-gray-50">Sign Out</button>
+        </div>
+      </div>
+
+      {view === "list" && <>
+        {/* Mini stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            {l:"My Records", v:myStats.total, c:"#e20074"},
+            {l:"Completed", v:myStats.done, c:"#10b981"},
+            {l:"In Progress", v:myStats.inprog, c:"#f59e0b"},
+            {l:"Lines Done", v:myStats.lines, c:"#6366f1"},
+          ].map(s=>(
+            <div key={s.l} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+              <p className="text-2xl font-black" style={{color:s.c}}>{s.v}</p>
+              <p className="text-xs text-gray-400 mt-1">{s.l}</p>
+            </div>
+          ))}
+        </div>
+        {loading ? <p className="text-center text-gray-400 text-sm py-8">Loading…</p>
+          : <RecordsTable records={records} onEdit={r=>{setEditRecord(r);setView("edit");}} isAdmin={false} />}
+      </>}
+
+      {view === "new" && (
+        <MigrationForm
+          ntid={ntid}
+          dealerCode={dealerCode}
+          onSaved={()=>{setView("list");refresh();}}
+          onCancel={()=>setView("list")}
+        />
+      )}
+
+      {view === "edit" && editRecord && (
+        <MigrationForm
+          ntid={ntid}
+          dealerCode={dealerCode}
+          editRecord={editRecord}
+          onSaved={()=>{setView("list");setEditRecord(null);refresh();}}
+          onCancel={()=>{setView("list");setEditRecord(null);}}
+        />
+      )}
+    </div>
+  );
 }
 
-function clearForm(){
-  ['f-name','f-phone','f-zip','f-metro-acct','f-pin','f-metro-plan',
-   'f-tmo-acct','f-tmo-pin','f-tmo-plan','f-order-id','f-date','f-devices','f-lines']
-    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('f-status').value='';
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [user, setUser] = useState(null); // { ntid, dealerCode, isAdmin }
+  const [allRecords, setAllRecords] = useState([]);
+
+  const refreshAll = async () => {
+    const r = await loadRecords();
+    setAllRecords(r);
+  };
+
+  const handleLogin = async (ntid, dealerCode) => {
+    const admins = await loadAdmins();
+    const isAdmin = admins.includes(ntid);
+    setUser({ ntid, dealerCode, isAdmin });
+    if (isAdmin) refreshAll();
+  };
+
+  const handleLogout = () => setUser(null);
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
+
+  if (user.isAdmin) return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="h-1 w-full" style={{background:"linear-gradient(90deg,#e20074,#7b0044)"}} />
+      <AdminPanel
+        currentNtid={user.ntid}
+        records={allRecords}
+        onBack={handleLogout}
+        onRefresh={refreshAll}
+      />
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="h-1 w-full" style={{background:"linear-gradient(90deg,#e20074,#7b0044)"}} />
+      <EmployeeView ntid={user.ntid} dealerCode={user.dealerCode} onLogout={handleLogout} />
+    </div>
+  );
 }
-</script>
-</body>
-</html>
